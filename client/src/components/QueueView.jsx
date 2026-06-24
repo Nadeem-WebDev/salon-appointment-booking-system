@@ -3,12 +3,12 @@ import React, { useEffect, useState } from 'react';
 export default function QueueView({ apiBase, refreshKey }) {
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showPast, setShowPast] = useState(false);
 
   async function fetchQueue() {
     try {
       setLoading(true);
-      const url = `${apiBase}/bookings/queue` + (showPast ? '?all=true' : '');
+      // Fetch only the active live queue
+      const url = `${apiBase}/bookings/queue`;
       const res = await fetch(url);
       const data = await res.json();
       setQueue(data);
@@ -23,7 +23,7 @@ export default function QueueView({ apiBase, refreshKey }) {
     fetchQueue();
     const iv = setInterval(fetchQueue, 10000);
     return () => clearInterval(iv);
-  }, [refreshKey, showPast]);
+  }, [refreshKey]);
 
   // Filter the queue to ONLY show appointments for the current day
   const displayQueue = queue.filter(booking => {
@@ -59,13 +59,6 @@ export default function QueueView({ apiBase, refreshKey }) {
         </div>
       ) : (
         <div className="flex flex-col gap-3 md:max-h-125 overflow-y-auto pr-1">
-          <div className="flex justify-end mb-2">
-            <label className="text-[13px] cursor-pointer flex items-center gap-1.5 text-gray-600 hover:text-gray-900 transition-colors">
-              <input type="checkbox" checked={showPast} onChange={e => setShowPast(e.target.checked)} className="rounded text-[#667eea] focus:ring-[#667eea]" />
-              Show past
-            </label>
-          </div>
-
           {displayQueue.map((booking, index) => (
             <div key={booking.id} className="flex flex-col sm:flex-row sm:items-center gap-3 md:gap-4 p-3.5 md:p-4 bg-linear-to-br from-[#f5f7fa] to-[#c3cfe2] rounded-lg transition-all duration-300 border-l-4 border-[#667eea] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:translate-x-1">
               

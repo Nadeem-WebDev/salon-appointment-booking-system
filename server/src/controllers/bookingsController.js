@@ -1,19 +1,7 @@
 import { pool } from '../config/db.js';
-import nodemailer from 'nodemailer'
-
 
 // Temporary in-memory store for OTPs (Key: Email, Value: OTP Data)
 const otpStore = new Map();
-
-// Configure the email transporter
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
 
 // 1. Request OTP
 export const requestOtp = async (req, res) => {
@@ -29,22 +17,45 @@ export const requestOtp = async (req, res) => {
   // Store OTP and booking data, expiring in 10 minutes
   otpStore.set(email, {
     otp,
-    bookingData: { customer_name, phone, service, appointment_time },
+    bookingData: { customer_name, phone, email, service, appointment_time },
     expiresAt: Date.now() + 10 * 60 * 1000,
   });
 
   try {
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: 'Salon Booking OTP Verification',
-      html: `
-        <h2>Verify your appointment</h2>
-        <p>Hi ${customer_name},</p>
-        <p>Your OTP for booking a ${service} appointment is: <strong style="font-size: 24px;">${otp}</strong></p>
-        <p>This code will expire in 10 minutes.</p>
-      `,
+    // Send email using Brevo's REST API
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': process.env.BREVO_API_KEY
+      },
+      body: JSON.stringify({
+        sender: { 
+          name: "Salon Booking System", 
+          email: process.env.EMAIL_USER // This must be the email you registered on Brevo with
+        },
+        to: [{ email: email, name: customer_name }],
+        subject: 'Salon Booking OTP Verification',
+        htmlContent: `
+          <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+            <h2 style="color: #667eea; text-align: center;">Verify your appointment</h2>
+            <p>Hi <strong>${customer_name}</strong>,</p>
+            <p>Your OTP for booking a ${service} appointment is:</p>
+            <div style="background: #f4f4f4; padding: 15px; text-align: center; border-radius: 5px; margin: 20px 0;">
+              <strong style="font-size: 32px; letter-spacing: 5px; color: #333;">${otp}</strong>
+            </div>
+            <p style="color: #888; font-size: 12px; text-align: center;">This code will expire in 10 minutes.</p>
+          </div>
+        `
+      })
     });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Brevo API Error:', errorData);
+      throw new Error('Failed to send OTP email via Brevo');
+    }
     
     res.status(200).json({ message: 'OTP sent successfully' });
   } catch (err) {
@@ -53,7 +64,6 @@ export const requestOtp = async (req, res) => {
   }
 };
 
-// 2. Verify OTP and Create Booking
 // 2. Verify OTP and Create Booking
 export const verifyOtpAndBook = async (req, res) => {
   const { email, otp } = req.body;
@@ -70,16 +80,13 @@ export const verifyOtpAndBook = async (req, res) => {
     return res.status(400).json({ error: 'Invalid OTP' });
   }
 
-  // OTP is valid, create the booking in PostgreSQL
   const { customer_name, phone, service, appointment_time } = record.bookingData;
   try {
-    // UPDATED: Added email to the INSERT statement
     const newBooking = await pool.query(
       'INSERT INTO bookings (customer_name, phone, email, service, appointment_time) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [customer_name, phone, email, service, appointment_time]
     );
     
-    // Clean up OTP store
     otpStore.delete(email);
     res.status(201).json(newBooking.rows[0]);
   } catch (err) {
@@ -110,7 +117,11 @@ export async function getQueue(req, res) {
 
     const now = new Date().toISOString();
     const result = await pool.query(
-      `SELECT * FROM bookings WHERE status IN ('queued', 'in-progress') AND (appointment_time >= $1 OR status = 'in-progress') ORDER BY appointment_time ASC`,
+      `SELECT * FROM bookings 
+       WHERE status IN ('queued', 'in-progress') 
+       AND (appointment_time >= $1 OR status = 'in-progress')
+       AND DATE(appointment_time AT TIME ZONE 'Asia/Kolkata') = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::DATE
+       ORDER BY appointment_time ASC`,
       [now]
     );
     res.json(result.rows);
@@ -119,7 +130,6 @@ export async function getQueue(req, res) {
     res.status(500).json({ error: 'Server error' });
   }
 }
-
 
 export async function updateBooking(req, res) {
   try {
