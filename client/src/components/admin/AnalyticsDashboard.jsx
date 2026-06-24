@@ -8,7 +8,7 @@ const SERVICE_PRICES = {
   'Haircut': 50,
   'Hair Color': 150,
   'Styling': 80,
-  'Treatment': 500,
+  'Hair Treatment': 500,
   'Beard Trim': 50
 };
 
