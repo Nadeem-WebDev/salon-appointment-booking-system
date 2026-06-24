@@ -63,11 +63,11 @@ export default function AnalyticsDashboard({ bookings }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* ADDED: min-w-0 and overflow-hidden to prevent Recharts blowout */}
+        {/* Service Popularity Chart */}
         <div className="bg-white p-4 md:p-6 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] min-w-0 overflow-hidden w-full">
           <h3 className="text-lg font-bold text-[#333] mb-4 m-0 truncate">Service Popularity</h3>
           {serviceData.length > 0 ? (
-            <div className="h-75 w-full">
+            <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={serviceData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value">
@@ -81,19 +81,30 @@ export default function AnalyticsDashboard({ bookings }) {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-75 flex items-center justify-center text-gray-400">No data for selected date</div>
+            <div className="h-[300px] flex items-center justify-center text-gray-400">No data for selected date</div>
           )}
         </div>
 
-        {/* ADDED: min-w-0 and overflow-hidden to prevent Recharts blowout */}
+        {/* Appointment Status Flow Chart */}
         <div className="bg-white p-4 md:p-6 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] min-w-0 overflow-hidden w-full">
           <h3 className="text-lg font-bold text-[#333] mb-4 m-0 truncate">Appointment Status Flow</h3>
-          <div className="h-75 w-full">
+          <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={statusData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+              {/* Adjusted margins to accommodate rotated text */}
+              <BarChart data={statusData} margin={{ top: 20, right: 10, left: -20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} />
+                {/* Added interval={0}, angle, and textAnchor to force all labels to show cleanly */}
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  interval={0} 
+                  angle={-35} 
+                  textAnchor="end" 
+                  tick={{ fontSize: 11, fill: '#666' }}
+                  height={50}
+                />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#666' }} />
                 <RechartsTooltip cursor={{fill: 'transparent'}} />
                 <Bar dataKey="count" fill="#667eea" radius={[4, 4, 0, 0]} barSize={40}>
                   {statusData.map((entry, index) => (
