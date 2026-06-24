@@ -7,19 +7,23 @@ const badgeColors = {
   'cancelled': 'bg-[#f8d7da] text-[#721c24]'
 };
 
-export default function AppointmentsList({ bookings, apiBase, onRefresh }) {
+export default function AppointmentsList({ bookings, apiBase, onRefresh, filters }) {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [message, setMessage] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // FIX: Only reset to page 1 when the user actively changes a filter
   useEffect(() => {
     setCurrentPage(1);
-  }, [bookings]);
+  }, [filters?.searchTerm, filters?.statusFilter, filters?.dateFilter]);
 
   const totalPages = Math.max(1, Math.ceil(bookings.length / itemsPerPage));
-  const startIndex = (currentPage - 1) * itemsPerPage;
+  
+  // FIX: Safely clamp the page in case polling causes the list to shrink
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * itemsPerPage;
   const currentBookings = bookings.slice(startIndex, startIndex + itemsPerPage);
 
   const formatDateTime = (isoString) => {
@@ -78,7 +82,6 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh }) {
         {currentBookings.map(booking => (
           <div key={booking.id} className="bg-white p-4 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.1)] flex flex-col gap-3 border-l-4 border-[#667eea] min-w-0">
             <div className="flex justify-between items-start gap-2">
-              {/* min-w-0 and truncate stops long emails from breaking the box */}
               <div className="min-w-0 flex-1">
                 <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">ID: {booking.id}</span>
                 <h3 className="font-bold text-[#333] text-lg m-0 truncate">{booking.customer_name}</h3>
@@ -201,17 +204,17 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh }) {
       {bookings.length > itemsPerPage && (
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3 mt-6 bg-white p-4 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.1)]">
           <button
-            disabled={currentPage === 1}
+            disabled={safePage === 1}
             onClick={() => setCurrentPage(prev => prev - 1)}
             className="w-full sm:w-auto py-2 px-4 rounded-lg font-semibold text-sm bg-gray-100 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-200 transition-colors"
           >
             ← Previous
           </button>
           <span className="text-sm font-semibold text-gray-600 bg-gray-50 py-2 px-4 rounded-lg border border-gray-100 w-full sm:w-auto text-center">
-            Page {currentPage} of {totalPages}
+            Page {safePage} of {totalPages}
           </span>
           <button
-            disabled={currentPage === totalPages}
+            disabled={safePage === totalPages}
             onClick={() => setCurrentPage(prev => prev + 1)}
             className="w-full sm:w-auto py-2 px-4 rounded-lg font-semibold text-sm bg-gray-100 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-200 transition-colors"
           >

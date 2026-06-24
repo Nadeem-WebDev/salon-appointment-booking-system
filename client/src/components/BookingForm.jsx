@@ -110,7 +110,7 @@ export default function BookingForm({ apiBase, onBooked }) {
               onChange={e => setCustomerName(e.target.value)}
               placeholder="Enter your name"
               required
-              className="p-2.5 md:p-[12px_14px] border-2 border-[#e0e0e0] rounded-lg text-[16px] md:text-[14px] transition-all duration-300 focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)] placeholder-[#999]"
+              className="w-full bg-white p-2.5 md:p-[12px_14px] min-h-12 border-2 border-[#e0e0e0] rounded-lg text-[16px] md:text-[14px] transition-all duration-300 focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)] placeholder-[#999]"
             />
           </div>
 
@@ -123,7 +123,7 @@ export default function BookingForm({ apiBase, onBooked }) {
               onChange={e => setEmail(e.target.value)}
               placeholder="For OTP verification"
               required
-              className="p-2.5 md:p-[12px_14px] border-2 border-[#e0e0e0] rounded-lg text-[16px] md:text-[14px] transition-all duration-300 focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)] placeholder-[#999]"
+              className="w-full bg-white p-2.5 md:p-[12px_14px] min-h-12 border-2 border-[#e0e0e0] rounded-lg text-[16px] md:text-[14px] transition-all duration-300 focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)] placeholder-[#999]"
             />
           </div>
 
@@ -135,7 +135,7 @@ export default function BookingForm({ apiBase, onBooked }) {
               value={phone}
               onChange={e => setPhone(e.target.value)}
               placeholder="(optional) Your phone number"
-              className="p-2.5 md:p-[12px_14px] border-2 border-[#e0e0e0] rounded-lg text-[16px] md:text-[14px] transition-all duration-300 focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)] placeholder-[#999]"
+              className="w-full bg-white p-2.5 md:p-[12px_14px] min-h-12 border-2 border-[#e0e0e0] rounded-lg text-[16px] md:text-[14px] transition-all duration-300 focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)] placeholder-[#999]"
             />
           </div>
 
@@ -145,7 +145,7 @@ export default function BookingForm({ apiBase, onBooked }) {
               id="service"
               value={service}
               onChange={e => setService(e.target.value)}
-              className="p-2.5 md:p-[12px_14px] border-2 border-[#e0e0e0] rounded-lg text-[16px] md:text-[14px] transition-all duration-300 focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)] bg-white"
+              className="w-full bg-white p-2.5 md:p-[12px_14px] min-h-12 border-2 border-[#e0e0e0] rounded-lg text-[16px] md:text-[14px] transition-all duration-300 focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)]"
             >
               <option value="Haircut">Haircut</option>
               <option value="Hair Color">Hair Color</option>
@@ -163,7 +163,7 @@ export default function BookingForm({ apiBase, onBooked }) {
               value={appointmentTime}
               onChange={e => setAppointmentTime(e.target.value)}
               required
-              className="p-2.5 md:p-[12px_14px] border-2 border-[#e0e0e0] rounded-lg text-[16px] md:text-[14px] transition-all duration-300 focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)]"
+              className="w-full bg-white p-2.5 md:p-[12px_14px] min-h-12 border-2 border-[#e0e0e0] rounded-lg text-[16px] md:text-[14px] transition-all duration-300 focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)]"
             />
           </div>
 
@@ -190,14 +190,14 @@ export default function BookingForm({ apiBase, onBooked }) {
               onChange={e => setOtp(e.target.value.replace(/\D/g, ''))} // Allow only numbers
               placeholder="000000"
               required
-              className="text-center tracking-[0.5em] font-bold p-3.5 border-2 border-[#e0e0e0] rounded-lg text-[20px] transition-all duration-300 focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)]"
+              className="text-center tracking-[0.5em] font-bold p-3.5 border-2 border-[#e0e0e0] rounded-lg text-[20px] transition-all duration-300 focus:outline-none focus:border-[#667eea] focus:shadow-[0_0_0_3px_rgba(102,126,234,0.1)] w-full bg-white"
             />
           </div>
 
           <button 
             type="submit" 
             disabled={loading || otp.length < 6}
-            className="mt-2 py-3 px-5 bg-linear-to-br from-[#28a745] to-[#218838] text-white border-none rounded-lg font-semibold cursor-pointer transition-all duration-300 hover:not(:disabled):-translate-y-0.5 hover:not(:disabled):shadow-[0_8px_20px_rgba(40,167,69,0.3)] disabled:opacity-60 disabled:cursor-not-allowed"
+            className="mt-2 py-3 px-5 bg-linear-to-br from-[#28a745] to-[#218838] text-white border-none rounded-lg font-semibold cursor-pointer transition-all duration-300 hover:not(:disabled):-translate-y-0.5 hover:not(:disabled):shadow-[0_8px_20px_rgba(40,167,69,0.3)] disabled:opacity-60 disabled:cursor-not-allowed w-full"
           >
             {loading ? 'Verifying...' : '✓ Confirm Booking'}
           </button>
@@ -205,7 +205,7 @@ export default function BookingForm({ apiBase, onBooked }) {
           <button 
             type="button"
             onClick={() => setStep(1)}
-            className="text-sm text-[#667eea] hover:underline font-medium text-center bg-transparent border-none cursor-pointer"
+            className="text-sm text-[#667eea] hover:underline font-medium text-center bg-transparent border-none cursor-pointer w-full"
           >
             ← Back to edit details
           </button>

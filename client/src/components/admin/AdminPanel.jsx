@@ -171,7 +171,8 @@ export default function AdminPanel({ apiBase, onBack }) {
         <AppointmentsList 
           bookings={filteredBookings} 
           apiBase={apiBase} 
-          onRefresh={loadBookings} 
+          onRefresh={loadBookings}
+          filters={{ searchTerm, statusFilter, dateFilter }} 
         />
       )}
     </div>
