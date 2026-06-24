@@ -15,9 +15,9 @@ app.use(express.json());
 app.use('/api/bookings', bookingsRoutes);
 
 if(process.env.NODE_ENV === "production") {
-    app.use(express.static(path.join(__dirname,"../server/dist")))
+    app.use(express.static(path.join(__dirname,"../client/dist")))
     app.get(/(.*)/  , (req, res)=>{
-        res.sendFile(path.join(__dirname, "../server", "dist", "index.html"))
+        res.sendFile(path.join(__dirname, "../client", "dist", "index.html"))
     })
 }
 

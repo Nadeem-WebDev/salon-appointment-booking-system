@@ -67,7 +67,7 @@ export default function AnalyticsDashboard({ bookings }) {
         <div className="bg-white p-4 md:p-6 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] min-w-0 overflow-hidden w-full">
           <h3 className="text-lg font-bold text-[#333] mb-4 m-0 truncate">Service Popularity</h3>
           {serviceData.length > 0 ? (
-            <div className="h-[300px] w-full">
+            <div className="h-75 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={serviceData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value">
@@ -81,14 +81,14 @@ export default function AnalyticsDashboard({ bookings }) {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-[300px] flex items-center justify-center text-gray-400">No data for selected date</div>
+            <div className="h-75 flex items-center justify-center text-gray-400">No data for selected date</div>
           )}
         </div>
 
         {/* Appointment Status Flow Chart */}
         <div className="bg-white p-4 md:p-6 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] min-w-0 overflow-hidden w-full">
           <h3 className="text-lg font-bold text-[#333] mb-4 m-0 truncate">Appointment Status Flow</h3>
-          <div className="h-[300px] w-full">
+          <div className="h-75 w-full">
             <ResponsiveContainer width="100%" height="100%">
               {/* Adjusted margins to accommodate rotated text */}
               <BarChart data={statusData} margin={{ top: 20, right: 10, left: -20, bottom: 20 }}>
