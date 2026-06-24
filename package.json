@@ -1,0 +1,14 @@
+{
+  "name": "salon-appointment-booking-system",
+  "version": "1.0.0",
+  "description": "A modern, full-stack salon booking system built with the PERN stack (PostgreSQL, Express, React, Node.js) featuring a customer booking interface and a comprehensive admin dashboard.",
+  "main": "index.js",
+  "scripts": {
+    "build": "npm install --prefix server && npm install --prefix client && npm run build --prefix client",
+    "start": "npm run start --prefix server"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
