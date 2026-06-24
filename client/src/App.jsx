@@ -6,7 +6,7 @@ import AdminPanel from './components/admin/AdminPanel.jsx';
 export default function App() {
   const [view, setView] = useState('customer'); // 'customer' or 'admin'
   const [queueRefreshKey, setQueueRefreshKey] = useState(0);
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api';
+  const API_BASE = import.meta.env.MODE === "development" ? import.meta.env.VITE_API_BASE : ""
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] font-sans text-[#111]">
