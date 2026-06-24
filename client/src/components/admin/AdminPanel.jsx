@@ -10,7 +10,6 @@ export default function AdminPanel({ apiBase, onBack }) {
   const [bookings, setBookings] = useState([]);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Filters
   const getTodayString = () => {
     const today = new Date();
     const year = today.getFullYear();
@@ -56,7 +55,6 @@ export default function AdminPanel({ apiBase, onBack }) {
     return <AdminLogin onLogin={handleLogin} onBack={onBack} error={loginError} />;
   }
 
-  // Derived state for the filtered bookings
   const filteredBookings = bookings.filter(booking => {
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
@@ -79,12 +77,10 @@ export default function AdminPanel({ apiBase, onBack }) {
   });
 
   return (
-    <div className="p-4 md:p-6 pt-6 bg-[#f8f9fa] min-h-screen max-w-350 mx-auto">
+    <div className="p-4 md:p-6 pt-6 bg-[#f8f9fa] min-h-screen max-w-350 mx-auto overflow-x-hidden">
       
-      {/* PERFECTED MOBILE HEADER (Never wraps, stays on one line) */}
+      {/* Header */}
       <div className="flex justify-between items-center mb-6 bg-white p-3 md:p-5 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.1)] gap-2 md:gap-4">
-        
-        {/* Left Side: Back button and Title */}
         <div className="flex items-center gap-2 md:gap-4 min-w-0">
           <button 
             onClick={onBack} 
@@ -92,15 +88,11 @@ export default function AdminPanel({ apiBase, onBack }) {
           >
             ← <span className="hidden sm:inline">Website</span>
           </button>
-          
           <h2 className="m-0 text-[#333] text-base md:text-xl font-bold truncate">
-            {/* Show short title on mobile, full title on desktop */}
             <span className="sm:hidden">Admin</span>
             <span className="hidden sm:inline">Admin Control Center</span>
           </h2>
         </div>
-
-        {/* Right Side: Logout Button */}
         <button 
           className="shrink-0 py-2 px-3 md:px-5 bg-[#e74c3c] text-white border-none rounded-lg cursor-pointer font-semibold transition-colors duration-300 hover:bg-[#c0392b] text-xs md:text-sm" 
           onClick={() => setAdminMode(false)}
@@ -112,25 +104,24 @@ export default function AdminPanel({ apiBase, onBack }) {
       {/* Mobile-Responsive Filter & Tabs Bar */}
       <div className="mb-6 bg-white p-4 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.05)] flex flex-col lg:flex-row lg:items-center justify-between gap-5">
         
-        {/* Tabs */}
-        <div className="flex flex-row gap-2 w-full lg:w-auto">
+        {/* Tabs: Stacked vertically on tiny screens, side-by-side on sm+ */}
+        <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
           <button 
             onClick={() => setActiveTab('dashboard')}
-            className={`flex-1 lg:flex-none py-2.5 px-4 rounded-lg font-semibold text-sm transition-all ${activeTab === 'dashboard' ? 'bg-[#667eea] text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            className={`w-full sm:w-auto py-2.5 px-4 rounded-lg font-semibold text-sm transition-all ${activeTab === 'dashboard' ? 'bg-[#667eea] text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
           >
-            📊 <span className="hidden sm:inline">Analytics</span> Overview
+            📊 <span className="sm:hidden md:inline">Analytics</span> Overview
           </button>
           <button 
             onClick={() => setActiveTab('list')}
-            className={`flex-1 lg:flex-none py-2.5 px-4 rounded-lg font-semibold text-sm transition-all ${activeTab === 'list' ? 'bg-[#667eea] text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            className={`w-full sm:w-auto py-2.5 px-4 rounded-lg font-semibold text-sm transition-all ${activeTab === 'list' ? 'bg-[#667eea] text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
           >
-            📋 Manage <span className="hidden sm:inline">Appointments</span>
+            📋 Manage <span className="sm:hidden md:inline">Appointments</span>
           </button>
         </div>
 
         {/* Filters */}
         <div className="flex flex-col md:flex-row items-center gap-3 w-full lg:w-auto">
-          
           {activeTab === 'list' && (
             <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
               <input
@@ -154,7 +145,6 @@ export default function AdminPanel({ apiBase, onBack }) {
             </div>
           )}
 
-          {/* Date Picker */}
           <div className="relative w-full sm:w-auto md:w-48">
             <input
               type="date"
@@ -175,7 +165,6 @@ export default function AdminPanel({ apiBase, onBack }) {
         </div>
       </div>
 
-      {/* Render Active Tab */}
       {activeTab === 'dashboard' ? (
         <AnalyticsDashboard bookings={filteredBookings} />
       ) : (

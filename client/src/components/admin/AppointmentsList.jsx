@@ -14,7 +14,6 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh }) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Reset page when bookings array changes (e.g., search/filter triggered in parent)
   useEffect(() => {
     setCurrentPage(1);
   }, [bookings]);
@@ -77,42 +76,45 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh }) {
           <div className="text-center py-8 text-gray-500 bg-white rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.1)]">No appointments found.</div>
         )}
         {currentBookings.map(booking => (
-          <div key={booking.id} className="bg-white p-4 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.1)] flex flex-col gap-3 border-l-4 border-[#667eea]">
-            <div className="flex justify-between items-start">
-              <div>
+          <div key={booking.id} className="bg-white p-4 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.1)] flex flex-col gap-3 border-l-4 border-[#667eea] min-w-0">
+            <div className="flex justify-between items-start gap-2">
+              {/* min-w-0 and truncate stops long emails from breaking the box */}
+              <div className="min-w-0 flex-1">
                 <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">ID: {booking.id}</span>
-                <h3 className="font-bold text-[#333] text-lg m-0">{booking.customer_name}</h3>
-                <p className="text-xs text-[#667eea] font-medium mt-0.5 m-0">{booking.email}</p>
+                <h3 className="font-bold text-[#333] text-lg m-0 truncate">{booking.customer_name}</h3>
+                <p className="text-xs text-[#667eea] font-medium mt-0.5 m-0 truncate">{booking.email}</p>
               </div>
               
-              {editingId === booking.id ? (
-                <select
-                  className="py-1 px-2 border-2 border-[#667eea] rounded-md text-xs bg-white"
-                  value={editForm.status}
-                  onChange={e => setEditForm({ ...editForm, status: e.target.value })}
-                >
-                  <option value="queued">Queued</option>
-                  <option value="in-progress">In Progress</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              ) : (
-                <span className={`py-1 px-2.5 rounded-full font-bold text-[10px] uppercase ${badgeColors[booking.status]}`}>{booking.status}</span>
-              )}
+              <div className="shrink-0">
+                {editingId === booking.id ? (
+                  <select
+                    className="py-1 px-2 border-2 border-[#667eea] rounded-md text-xs bg-white w-full max-w-25"
+                    value={editForm.status}
+                    onChange={e => setEditForm({ ...editForm, status: e.target.value })}
+                  >
+                    <option value="queued">Queued</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                ) : (
+                  <span className={`inline-block py-1 px-2.5 rounded-full font-bold text-[10px] uppercase whitespace-nowrap ${badgeColors[booking.status]}`}>{booking.status}</span>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-sm text-gray-600 mt-1">
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-gray-400 m-0">Service</p>
-                <p className="font-medium m-0">{booking.service}</p>
+                <p className="font-medium m-0 truncate">{booking.service}</p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-gray-400 m-0">Phone</p>
-                <p className="font-medium m-0">{booking.phone || '-'}</p>
+                <p className="font-medium m-0 truncate">{booking.phone || '-'}</p>
               </div>
-              <div className="col-span-2">
+              <div className="col-span-2 min-w-0">
                 <p className="text-xs text-gray-400 m-0">Time</p>
-                <p className="font-medium m-0">{formatDateTime(booking.appointment_time)}</p>
+                <p className="font-medium m-0 truncate">{formatDateTime(booking.appointment_time)}</p>
               </div>
             </div>
 
@@ -173,7 +175,7 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh }) {
                       <option value="cancelled">Cancelled</option>
                     </select>
                   ) : (
-                    <span className={`py-1.5 px-3 rounded-full font-semibold text-[11px] uppercase ${badgeColors[booking.status]}`}>{booking.status}</span>
+                    <span className={`py-1.5 px-3 rounded-full font-semibold text-[11px] uppercase whitespace-nowrap ${badgeColors[booking.status]}`}>{booking.status}</span>
                   )}
                 </td>
                 <td className="p-4 border-b border-[#e0e0e0] text-sm">
@@ -195,23 +197,23 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh }) {
         </table>
       </div>
 
-      {/* --- PAGINATION CONTROLS --- */}
+      {/* --- MOBILE PAGINATION FIX --- */}
       {bookings.length > itemsPerPage && (
-        <div className="flex justify-between items-center mt-6 bg-white p-3 md:p-4 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.1)]">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-3 mt-6 bg-white p-4 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.1)]">
           <button
             disabled={currentPage === 1}
             onClick={() => setCurrentPage(prev => prev - 1)}
-            className="py-2 px-4 rounded-lg font-semibold text-sm bg-gray-100 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-200 transition-colors"
+            className="w-full sm:w-auto py-2 px-4 rounded-lg font-semibold text-sm bg-gray-100 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-200 transition-colors"
           >
             ← Previous
           </button>
-          <span className="text-sm font-semibold text-gray-600 bg-gray-50 py-2 px-4 rounded-lg border border-gray-100">
+          <span className="text-sm font-semibold text-gray-600 bg-gray-50 py-2 px-4 rounded-lg border border-gray-100 w-full sm:w-auto text-center">
             Page {currentPage} of {totalPages}
           </span>
           <button
             disabled={currentPage === totalPages}
             onClick={() => setCurrentPage(prev => prev + 1)}
-            className="py-2 px-4 rounded-lg font-semibold text-sm bg-gray-100 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-200 transition-colors"
+            className="w-full sm:w-auto py-2 px-4 rounded-lg font-semibold text-sm bg-gray-100 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-200 transition-colors"
           >
             Next →
           </button>

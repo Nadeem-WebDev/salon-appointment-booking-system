@@ -45,26 +45,27 @@ export default function AnalyticsDashboard({ bookings }) {
     <div className="animate-slideIn">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-5 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border-l-4 border-[#667eea] hover:-translate-y-1 transition-transform">
-          <h4 className="text-gray-500 text-sm font-bold uppercase m-0">Total Bookings</h4>
-          <p className="text-3xl font-black text-[#333] mt-2 mb-0">{totalAppointments}</p>
+          <h4 className="text-gray-500 text-sm font-bold uppercase m-0 truncate">Total Bookings</h4>
+          <p className="text-3xl font-black text-[#333] mt-2 mb-0 truncate">{totalAppointments}</p>
         </div>
         <div className="bg-white p-5 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border-l-4 border-[#28a745] hover:-translate-y-1 transition-transform">
-          <h4 className="text-gray-500 text-sm font-bold uppercase m-0">Completed</h4>
-          <p className="text-3xl font-black text-[#333] mt-2 mb-0">{completedAppointments}</p>
+          <h4 className="text-gray-500 text-sm font-bold uppercase m-0 truncate">Completed</h4>
+          <p className="text-3xl font-black text-[#333] mt-2 mb-0 truncate">{completedAppointments}</p>
         </div>
         <div className="bg-white p-5 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border-l-4 border-[#ffc107] hover:-translate-y-1 transition-transform">
-          <h4 className="text-gray-500 text-sm font-bold uppercase m-0">Est. Revenue</h4>
-          <p className="text-3xl font-black text-[#333] mt-2 mb-0">₹{estimatedRevenue.toLocaleString()}</p>
+          <h4 className="text-gray-500 text-sm font-bold uppercase m-0 truncate">Est. Revenue</h4>
+          <p className="text-3xl font-black text-[#333] mt-2 mb-0 truncate">₹{estimatedRevenue.toLocaleString()}</p>
         </div>
         <div className="bg-white p-5 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border-l-4 border-[#dc3545] hover:-translate-y-1 transition-transform">
-          <h4 className="text-gray-500 text-sm font-bold uppercase m-0">Cancelled</h4>
-          <p className="text-3xl font-black text-[#333] mt-2 mb-0">{cancelledAppointments}</p>
+          <h4 className="text-gray-500 text-sm font-bold uppercase m-0 truncate">Cancelled</h4>
+          <p className="text-3xl font-black text-[#333] mt-2 mb-0 truncate">{cancelledAppointments}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
-          <h3 className="text-lg font-bold text-[#333] mb-4 m-0">Service Popularity</h3>
+        {/* ADDED: min-w-0 and overflow-hidden to prevent Recharts blowout */}
+        <div className="bg-white p-4 md:p-6 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] min-w-0 overflow-hidden w-full">
+          <h3 className="text-lg font-bold text-[#333] mb-4 m-0 truncate">Service Popularity</h3>
           {serviceData.length > 0 ? (
             <div className="h-75 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -84,8 +85,9 @@ export default function AnalyticsDashboard({ bookings }) {
           )}
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
-          <h3 className="text-lg font-bold text-[#333] mb-4 m-0">Appointment Status Flow</h3>
+        {/* ADDED: min-w-0 and overflow-hidden to prevent Recharts blowout */}
+        <div className="bg-white p-4 md:p-6 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] min-w-0 overflow-hidden w-full">
+          <h3 className="text-lg font-bold text-[#333] mb-4 m-0 truncate">Appointment Status Flow</h3>
           <div className="h-75 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={statusData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
