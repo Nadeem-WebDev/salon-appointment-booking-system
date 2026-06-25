@@ -81,7 +81,7 @@ export default function AdminPanel({ apiBase, onBack }) {
     <div className="p-4 md:p-6 lg:p-8 bg-[#E8FCCF] min-h-screen max-w-[1600px] mx-auto overflow-x-hidden text-[#134611] relative">
       
       {/* Background glow for admin area */}
-      <div className="absolute top-20 right-0 w-[500px] h-[500px] bg-[#96E072]/30 blur-[150px] rounded-full pointer-events-none -z-10"></div>
+      <div className="absolute top-20 right-0 w-125 h-125 bg-[#96E072]/30 blur-[150px] rounded-full pointer-events-none -z-10"></div>
 
       {/* Header (Glassmorphism) */}
       <div className="flex justify-between items-center mb-6 bg-[#134611]/90 backdrop-blur-md border border-[#134611] p-4 md:p-5 rounded-2xl shadow-lg gap-3">

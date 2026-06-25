@@ -18,7 +18,7 @@ export default function App() {
         <>
           {/* Deep Green Glass Navbar */}
           <nav className="sticky top-0 z-50 bg-[#134611]/85 backdrop-blur-lg border-b border-[#3DA35D]/40 shadow-lg">
-            <div className="max-w-[1400px] mx-auto py-3 px-4 md:px-8 flex flex-wrap justify-between items-center gap-4">
+            <div className="max-w-350 mx-auto py-3 px-4 md:px-8 flex flex-wrap justify-between items-center gap-4">
               
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 md:w-12 md:h-12 bg-white/10 rounded-xl flex items-center justify-center p-2 border border-[#96E072]/30 backdrop-blur-sm">
@@ -39,10 +39,10 @@ export default function App() {
             </div>
           </nav>
 
-          <main className="py-12 px-4 md:px-8 max-w-[1400px] mx-auto relative">
+          <main className="py-12 px-4 md:px-8 max-w-350 mx-auto relative">
             
             {/* Ambient Background Glow for extra depth */}
-            <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[60%] h-[400px] bg-[#96E072]/40 blur-[120px] rounded-full pointer-events-none -z-10"></div>
+            <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[60%] h-100 bg-[#96E072]/40 blur-[120px] rounded-full pointer-events-none -z-10"></div>
 
             <section className="text-center mb-12 max-w-2xl mx-auto">
               <h2 className="text-3xl md:text-5xl font-black mb-4 text-[#134611] tracking-tight">

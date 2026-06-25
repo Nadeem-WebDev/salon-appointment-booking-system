@@ -60,7 +60,7 @@ const indicatorColors = {
           <p className="text-base font-bold m-0">No appointments in the queue today</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3 md:max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="flex flex-col gap-3 md:max-h-125 overflow-y-auto pr-2 custom-scrollbar">
           {displayQueue.map((booking, index) => (
             <div key={booking.id} className="group flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white/70 backdrop-blur-md border border-[#3DA35D]/30 rounded-2xl transition-all duration-300 hover:shadow-[0_8px_20px_rgba(19,70,17,0.1)] hover:border-[#3E8914]">
               

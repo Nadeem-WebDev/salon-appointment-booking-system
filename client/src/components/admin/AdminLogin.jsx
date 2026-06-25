@@ -15,17 +15,17 @@ export default function AdminLogin({ onLogin, onBack, error }) {
     <div className="flex flex-col items-center justify-center min-h-screen bg-[#E8FCCF] p-4 font-sans text-[#134611] relative overflow-hidden">
       
       {/* Ambient Orbs for Glass Effect */}
-      <div className="absolute top-[-10%] right-[-5%] w-[400px] h-[400px] bg-[#96E072]/50 blur-[100px] rounded-full pointer-events-none"></div>
-      <div className="absolute bottom-[-10%] left-[-5%] w-[300px] h-[300px] bg-[#3DA35D]/40 blur-[100px] rounded-full pointer-events-none"></div>
+      <div className="absolute top-[-10%] right-[-5%] w-100 h-100 bg-[#96E072]/50 blur-[100px] rounded-full pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] left-[-5%] w-75 h-75 bg-[#3DA35D]/40 blur-[100px] rounded-full pointer-events-none"></div>
 
-      <div className="w-full max-w-[420px] mb-6 z-10">
+      <div className="w-full max-w-105 mb-6 z-10">
         <button onClick={onBack} className="flex items-center gap-2 text-[#3E8914] hover:text-[#134611] transition-colors bg-transparent border-none cursor-pointer text-sm font-bold">
           <ArrowLeft size={16} /> Back to Website
         </button>
       </div>
 
       {/* Clean Glassmorphism Card */}
-      <div className="bg-white/40 backdrop-blur-2xl border border-white/60 p-8 md:p-10 rounded-3xl shadow-[0_8px_32px_rgba(19,70,17,0.1)] w-full max-w-[420px] z-10 relative">
+      <div className="bg-white/40 backdrop-blur-2xl border border-white/60 p-8 md:p-10 rounded-3xl shadow-[0_8px_32px_rgba(19,70,17,0.1)] w-full max-w-105 z-10 relative">
         
         <div className="flex flex-col items-center mb-8">
           <div className="w-16 h-16 bg-[#134611] rounded-2xl flex items-center justify-center p-3 shadow-lg mb-5 border border-[#3DA35D]/30">

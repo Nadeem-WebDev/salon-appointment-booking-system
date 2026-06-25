@@ -64,7 +64,7 @@ export default function AnalyticsDashboard({ bookings }) {
         <div className="bg-white/80 backdrop-blur-md p-4 md:p-6 rounded-2xl shadow-lg border border-[#BB9457]/30 min-w-0 overflow-hidden w-full">
           <h3 className="text-lg font-black text-[#432818] mb-4 m-0 truncate">Service Popularity</h3>
           {serviceData.length > 0 ? (
-            <div className="h-[300px] w-full">
+            <div className="h-75 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={serviceData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value" stroke="none">
@@ -78,13 +78,13 @@ export default function AnalyticsDashboard({ bookings }) {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-[300px] flex items-center justify-center text-[#99582A] font-bold">No data for selected date</div>
+            <div className="h-75 flex items-center justify-center text-[#99582A] font-bold">No data for selected date</div>
           )}
         </div>
 
         <div className="bg-white/80 backdrop-blur-md p-4 md:p-6 rounded-2xl shadow-lg border border-[#BB9457]/30 min-w-0 overflow-hidden w-full">
           <h3 className="text-lg font-black text-[#432818] mb-4 m-0 truncate">Appointment Status Flow</h3>
-          <div className="h-[300px] w-full">
+          <div className="h-75 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={statusData} margin={{ top: 20, right: 10, left: -20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3DA35D" strokeOpacity={0.3} />
