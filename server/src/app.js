@@ -5,6 +5,7 @@ import 'dotenv/config'; // Modern ESM way to load dotenv
 import path from 'path';
 
 import bookingsRoutes from './routes/bookings.js';
+import authRoutes from './routes/auth.js';
 
 const app = express();
 const __dirname = path.resolve();
@@ -13,6 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api/bookings', bookingsRoutes);
+app.use('/api/auth', authRoutes);
 
 if(process.env.NODE_ENV === "production") {
     app.use(express.static(path.join(__dirname,"../client/dist")))

@@ -1,39 +1,269 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 export default function BookingForm({ apiBase, onBooked }) {
-  const [step, setStep] = useState(1);
+  // Form States
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [service, setService] = useState('Haircut');
-  const [appointmentTime, setAppointmentTime] = useState('');
-  const [otp, setOtp] = useState('');
+  
+  // Dynamic Config Data
+  const [servicesList, setServicesList] = useState([]);
+  const [staffList, setStaffList] = useState([]);
+  const [serviceId, setServiceId] = useState('');
+  const [staffId, setStaffId] = useState('');
+  
+  // Settings & Availability Data
+  const [businessHours, setBusinessHours] = useState([]);
+  const [blockedDates, setBlockedDates] = useState([]);
+  const [appointmentDate, setAppointmentDate] = useState('');
+  const [appointmentSlot, setAppointmentSlot] = useState('');
+  const [bookedSlots, setBookedSlots] = useState([]); 
+  
+  // UI States
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState(''); 
   const [loading, setLoading] = useState(false);
 
-  async function handleRequestOtp(e) {
-    e.preventDefault(); setLoading(true); setMessage('');
-    const payload = { customer_name: customerName, phone, email, service, appointment_time: new Date(appointmentTime).toISOString() };
-    try {
-      const res = await fetch(`${apiBase}/bookings/request-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to request OTP');
-      setMessageType('success'); setMessage('✓ OTP sent to your email!'); setStep(2); setTimeout(() => setMessage(''), 3000);
-    } catch (err) { setMessageType('error'); setMessage(`✗ ${err.message}`); } finally { setLoading(false); }
-  }
+  const todayString = new Date().toLocaleDateString('en-CA'); 
 
-  async function handleVerifyOtp(e) {
-    e.preventDefault(); setLoading(true); setMessage('');
+  // Fetch all dynamic configuration data on mount
+  useEffect(() => {
+    const fetchSalonData = async () => {
+      try {
+        const [servicesRes, staffRes, hoursRes, blockedRes] = await Promise.all([
+          fetch(`${apiBase}/bookings/services`),
+          fetch(`${apiBase}/bookings/staff`),
+          fetch(`${apiBase}/bookings/settings/hours`),
+          fetch(`${apiBase}/bookings/settings/blocked-dates`)
+        ]);
+        
+        const servicesData = await servicesRes.json();
+        const staffData = await staffRes.json();
+        
+        setServicesList(servicesData);
+        setStaffList(staffData);
+        setBusinessHours(await hoursRes.json());
+        setBlockedDates(await blockedRes.json());
+        
+        // Auto-select the first option
+        if (servicesData.length > 0) setServiceId(servicesData[0].id);
+        if (staffData.length > 0) setStaffId(staffData[0].id);
+      } catch (err) {
+        console.error("Failed to load salon config", err);
+      }
+    };
+    fetchSalonData();
+  }, [apiBase]);
+
+  // Fetch already booked slots when a date and stylist are picked
+  useEffect(() => {
+    if (!appointmentDate || !staffId) {
+      setBookedSlots([]);
+      return;
+    }
+    
+    const fetchBookedSlots = async () => {
+      try {
+        const res = await fetch(`${apiBase}/bookings/booked-times?date=${appointmentDate}&staff_id=${staffId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setBookedSlots(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch booked slots", err);
+      }
+    };
+    fetchBookedSlots();
+  }, [appointmentDate, staffId, apiBase]);
+
+  // Handle Date Selection & Holiday Validation
+  const handleDateChange = (e) => {
+    const selectedDate = e.target.value;
+    setMessage('');
+    
+    // 1. Check if it's a blocked date (Holiday/Renovation)
+    if (blockedDates.some(bd => bd.blocked_date === selectedDate)) {
+      setMessageType('error');
+      setMessage('Sorry, the salon is closed on this date.');
+      setAppointmentDate('');
+      setAppointmentSlot('');
+      return;
+    }
+
+    // 2. Check if the salon is closed on this specific day of the week
+    const dateObj = new Date(selectedDate);
+    const dayOfWeek = dateObj.getUTCDay(); // 0 = Sunday, 1 = Monday
+    const daySettings = businessHours.find(h => h.day_of_week === dayOfWeek);
+
+    if (daySettings && daySettings.is_closed) {
+      setMessageType('error');
+      setMessage('Sorry, the salon is closed on this day of the week.');
+      setAppointmentDate('');
+      setAppointmentSlot('');
+      return;
+    }
+
+    setAppointmentDate(selectedDate);
+    setAppointmentSlot(''); 
+  };
+
+  // Generate available 20-minute intervals based on Business Hours
+  const availableSlots = useMemo(() => {
+    if (!appointmentDate || businessHours.length === 0) return [];
+
+    const dateObj = new Date(appointmentDate);
+    const dayOfWeek = dateObj.getUTCDay();
+    const daySettings = businessHours.find(h => h.day_of_week === dayOfWeek);
+
+    if (!daySettings || daySettings.is_closed) return [];
+
+    const slots = [];
+    const isToday = appointmentDate === todayString;
+    const now = new Date();
+    
+    // Convert open and close times to minutes for generation
+    const [openH, openM] = daySettings.open_time.split(':').map(Number);
+    const [closeH, closeM] = daySettings.close_time.split(':').map(Number);
+    
+    const startMins = openH * 60 + openM;
+    const endMins = closeH * 60 + closeM;
+
+    for (let currentMins = startMins; currentMins <= endMins; currentMins += 20) {
+      const h = Math.floor(currentMins / 60);
+      const m = currentMins % 60;
+      
+      const hour = h.toString().padStart(2, '0');
+      const min = m.toString().padStart(2, '0');
+      const timeString = `${hour}:${min}`;
+
+      // Filter out past times for today
+      if (isToday) {
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+        if (currentMins <= nowMins) continue;
+      }
+      
+      // Remove slots already taken in the database
+      if (bookedSlots.includes(timeString)) continue;
+
+      slots.push(timeString);
+    }
+    return slots;
+  }, [appointmentDate, todayString, bookedSlots, businessHours]);
+
+  const formatTimeDisplay = (time24) => {
+    const [h, m] = time24.split(':');
+    const hour = parseInt(h, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+    return `${displayHour}:${m} ${ampm}`;
+  };
+
+  // --- NEW: Handle Razorpay Checkout & Booking ---
+  async function handlePaymentCheckout(e) {
+    e.preventDefault(); 
+    setLoading(true); 
+    setMessage('');
+
+    if (!appointmentDate || !appointmentSlot) {
+      setMessageType('error');
+      setMessage('Please select both a date and a time slot.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const res = await fetch(`${apiBase}/bookings/verify-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, otp }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to verify OTP');
-      if (typeof onBooked === 'function') onBooked();
-      setMessageType('success'); setMessage('✓ Booking confirmed! Your appointment has been scheduled.');
-      setStep(1); setCustomerName(''); setPhone(''); setEmail(''); setOtp(''); setAppointmentTime('');
-      setTimeout(() => setMessage(''), 4000);
-    } catch (err) { setMessageType('error'); setMessage(`✗ ${err.message}`); } finally { setLoading(false); }
+      // Generate the final time string FIRST
+      const [year, month, day] = appointmentDate.split('-');
+      const [hour, minute] = appointmentSlot.split(':');
+      const finalAppointmentTime = new Date(year, month - 1, day, hour, minute).toISOString();
+
+      // 2. Ask backend to create a Razorpay Order (Now sending staff and time for validation)
+      const orderRes = await fetch(`${apiBase}/bookings/create-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          service_id: serviceId,
+          staff_id: staffId,
+          appointment_time: finalAppointmentTime
+        })
+      });
+      const orderData = await orderRes.json();
+
+      // Catch the 409 Conflict if the slot is already taken
+      if (orderRes.status === 409) {
+        setAppointmentSlot('');
+        throw new Error(orderData.error);
+      }
+      
+      if (!orderRes.ok) throw new Error(orderData.error);
+
+
+      // Configure Razorpay Popup Options
+      const options = {
+        key: orderData.key_id,
+        amount: orderData.deposit_amount * 100, // Amount in paise
+        currency: orderData.currency,
+        name: "SalonBooker",
+        description: "30% Appointment Deposit",
+        order_id: orderData.order_id,
+        handler: async function (response) {
+          
+          // 3. Verify Payment on Backend & Save Booking
+          const verifyRes = await fetch(`${apiBase}/bookings/verify-payment`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              bookingData: {
+                customer_name: customerName,
+                phone,
+                email,
+                service_id: serviceId,
+                staff_id: staffId,
+                appointment_time: finalAppointmentTime,
+                deposit_amount: orderData.deposit_amount
+              }
+            })
+          });
+
+          if (verifyRes.ok) {
+            if (typeof onBooked === 'function') onBooked();
+            setMessageType('success');
+            setMessage(`✓ Deposit of ₹${orderData.deposit_amount} received! Appointment confirmed.`);
+            // Reset Form
+            setCustomerName(''); setPhone(''); setEmail(''); setAppointmentDate(new Date().toLocaleDateString('en-CA')); setAppointmentSlot('');
+          } else {
+            setMessageType('error');
+            setMessage('Payment verification failed. Please contact support.');
+          }
+        },
+        prefill: {
+          name: customerName,
+          email: email,
+          contact: phone
+        },
+        theme: {
+          color: "#134611"
+        }
+      };
+
+      const paymentObject = new window.Razorpay(options);
+      
+      paymentObject.on('payment.failed', function (response) {
+        setMessageType('error');
+        setMessage('Payment was cancelled or failed. Please try again.');
+      });
+      
+      paymentObject.open();
+
+    } catch (err) {
+      setMessageType('error');
+      setMessage(`✗ ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const messageStyles = {
@@ -41,79 +271,96 @@ export default function BookingForm({ apiBase, onBooked }) {
     'error': 'bg-red-100 text-red-700 border-l-4 border-red-500'
   };
 
-  const inputClass = "w-full bg-white/60 p-2.5 md:p-[12px_14px] min-h-[48px] border-2 border-[#3DA35D]/50 rounded-xl text-[#134611] font-bold transition-all duration-300 focus:outline-none focus:border-[#3E8914] focus:bg-white/80 focus:ring-4 focus:ring-[#96E072]/40 placeholder-[#134611]/50";
+  const inputClass = "w-full bg-white/50 backdrop-blur-sm p-2.5 md:p-[12px_14px] min-h-[48px] border-2 border-[#3DA35D]/40 rounded-xl text-[#134611] font-bold transition-all duration-300 focus:outline-none focus:border-[#3E8914] focus:bg-white/80 focus:ring-4 focus:ring-[#96E072]/40 placeholder-[#134611]/50";
 
   return (
-    <div className="grid gap-4 md:gap-5 relative">
-      {step === 1 ? (
-        <form onSubmit={handleRequestOtp} className="grid gap-4 md:gap-5">
-          <div className="flex flex-col">
-            <label htmlFor="name" className="text-[14px] font-bold text-[#134611] mb-2">Full Name *</label>
-            <input id="name" type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Enter your name" required className={inputClass} />
-          </div>
-          <div className="flex flex-col">
-            <label htmlFor="email" className="text-[14px] font-bold text-[#134611] mb-2">Email Address *</label>
-            <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="For OTP verification" required className={inputClass} />
-          </div>
-          <div className="flex flex-col">
-            <label htmlFor="phone" className="text-[14px] font-bold text-[#134611] mb-2">Phone Number</label>
-            <input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(optional) Your phone number" className={inputClass} />
-          </div>
+    <div className="grid gap-4 md:gap-5 relative animate-slideIn">
+      <form onSubmit={handlePaymentCheckout} className="grid gap-4 md:gap-5">
+        <div className="flex flex-col">
+          <label htmlFor="name" className="text-[14px] font-bold text-[#134611] mb-2">Full Name *</label>
+          <input id="name" type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Enter your name" required className={inputClass} />
+        </div>
+        
+        <div className="flex flex-col">
+          <label htmlFor="email" className="text-[14px] font-bold text-[#134611] mb-2">Email Address *</label>
+          <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="For receipt & confirmation" required className={inputClass} />
+        </div>
+        
+        <div className="flex flex-col">
+          <label htmlFor="phone" className="text-[14px] font-bold text-[#134611] mb-2">Phone Number *</label>
+          <input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Required for payment verification" required className={inputClass} />
+        </div>
+
+        {/* Dynamic Services & Staff Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
           <div className="flex flex-col">
             <label htmlFor="service" className="text-[14px] font-bold text-[#134611] mb-2">Service *</label>
-            <select id="service" value={service} onChange={e => setService(e.target.value)} className={inputClass}>
-              <option value="Haircut">Haircut</option>
-              <option value="Hair Color">Hair Color</option>
-              <option value="Styling">Styling</option>
-              <option value="Treatment">Hair Treatment</option>
-              <option value="Beard Trim">Beard Trim</option>
+            <select id="service" value={serviceId} onChange={e => setServiceId(e.target.value)} required className={inputClass}>
+              {servicesList.length === 0 && <option value="">Loading services...</option>}
+              {servicesList.map(s => (
+                <option key={s.id} value={s.id}>{s.name} - ₹{s.price}</option>
+              ))}
             </select>
           </div>
           <div className="flex flex-col">
-            <label htmlFor="time" className="text-[14px] font-bold text-[#134611] mb-2">Appointment Date & Time *</label>
-            <input id="time" type="datetime-local" value={appointmentTime} onChange={e => setAppointmentTime(e.target.value)} required className={inputClass} />
+            <label htmlFor="staff" className="text-[14px] font-bold text-[#134611] mb-2">Preferred Stylist *</label>
+            <select id="staff" value={staffId} onChange={e => { setStaffId(e.target.value); setAppointmentSlot(''); }} required className={inputClass}>
+              {staffList.length === 0 && <option value="">Loading staff...</option>}
+              {staffList.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
           </div>
+        </div>
 
-          <button type="submit" disabled={loading} className="mt-2 py-3.5 px-6 bg-[#3E8914] text-[#E8FCCF] border-none rounded-xl text-[16px] font-black cursor-pointer transition-all duration-300 hover:not(:disabled):bg-[#134611] hover:not(:disabled):shadow-[0_8px_20px_rgba(19,70,17,0.3)] hover:not(:disabled):-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed">
-            {loading ? 'Sending Verification...' : 'Continue to Verification →'}
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={handleVerifyOtp} className="grid gap-3 md:gap-5 bg-white/40 backdrop-blur-md p-4 md:p-6 rounded-2xl border border-[#3DA35D]/30">
-          <div className="text-center mb-1 md:mb-2">
-            <h4 className="text-lg md:text-xl font-black text-[#134611] m-0">Check your email</h4>
-            <p className="text-xs md:text-sm text-[#3E8914] mt-1 md:mt-2">
-              We sent a 6-digit code to <br className="sm:hidden"/>
-              <strong className="text-[#134611] break-all">{email}</strong>
-            </p>
-          </div>
+        {/* Dynamic Date & Time Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
           <div className="flex flex-col">
+            <label htmlFor="date" className="text-[14px] font-bold text-[#134611] mb-2">Date *</label>
             <input 
-              type="text" 
-              maxLength="6" 
-              value={otp} 
-              onChange={e => setOtp(e.target.value.replace(/\D/g, ''))} 
-              placeholder="000000" 
+              id="date" 
+              type="date" 
+              min={todayString} 
+              value={appointmentDate} 
+              onChange={handleDateChange} 
               required 
-              className="text-center tracking-[0.3em] md:tracking-[0.5em] font-black p-3 md:p-4 border-2 border-[#3DA35D]/50 rounded-xl text-[20px] md:text-[24px] text-[#134611] bg-white/80 transition-all focus:outline-none focus:border-[#3E8914] focus:ring-4 focus:ring-[#96E072]/50 w-full" 
+              className={inputClass} 
             />
           </div>
-          <button 
-            type="submit" 
-            disabled={loading || otp.length < 6} 
-            className="mt-1 md:mt-2 py-3 md:py-3.5 px-5 bg-[#134611] text-[#E8FCCF] border-none rounded-xl font-bold text-base md:text-lg cursor-pointer transition-all duration-300 hover:not(:disabled):bg-[#3E8914] hover:not(:disabled):shadow-[0_8px_20px_rgba(62,137,20,0.3)] hover:not(:disabled):-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed w-full"
-          >
-            {loading ? 'Verifying...' : '✓ Confirm Booking'}
-          </button>
-          <button 
-            type="button" 
-            onClick={() => setStep(1)} 
-            className="text-xs md:text-sm text-[#3DA35D] hover:text-[#134611] hover:underline font-bold text-center bg-transparent border-none cursor-pointer w-full mt-1 md:mt-2"
-          >
-            ← Back to edit details
-          </button>
-        </form>
-      )}
+          <div className="flex flex-col">
+            <label htmlFor="time" className="text-[14px] font-bold text-[#134611] mb-2">Time Slot *</label>
+            <select 
+              id="time" 
+              value={appointmentSlot} 
+              onChange={e => setAppointmentSlot(e.target.value)} 
+              required 
+              disabled={!appointmentDate}
+              className={`${inputClass} ${!appointmentDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <option value="" disabled>
+                {!appointmentDate ? 'Select a date first' : 'Choose a time'}
+              </option>
+              {availableSlots.length > 0 ? (
+                availableSlots.map(slot => (
+                  <option key={slot} value={slot}>
+                    {formatTimeDisplay(slot)}
+                  </option>
+                ))
+              ) : (
+                appointmentDate && <option value="" disabled>No slots available</option>
+              )}
+            </select>
+          </div>
+        </div>
+
+        <button 
+          type="submit" 
+          disabled={loading || !appointmentDate || !appointmentSlot || !serviceId || !staffId} 
+          className="mt-2 py-3.5 px-6 bg-[#3E8914] text-[#E8FCCF] border-none rounded-xl text-[16px] font-black cursor-pointer transition-all duration-300 hover:not(:disabled):bg-[#134611] hover:not(:disabled):shadow-[0_8px_20px_rgba(19,70,17,0.3)] hover:not(:disabled):-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {loading ? 'Connecting to Secure Checkout...' : 'Pay 30% Deposit & Book →'}
+        </button>
+      </form>
 
       {message && (
         <div className={`p-4 rounded-xl font-bold text-[14px] animate-slideIn ${messageStyles[messageType]}`}>

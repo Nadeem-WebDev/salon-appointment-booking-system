@@ -1,49 +1,94 @@
+import Razorpay from 'razorpay';
+import crypto from 'crypto';
+
 import { pool } from '../config/db.js';
 
 // Temporary in-memory store for OTPs (Key: Email, Value: OTP Data)
 const otpStore = new Map();
 
-// 1. Request OTP
-export const requestOtp = async (req, res) => {
-  const { customer_name, phone, email, service, appointment_time } = req.body;
+// --- NEW: Fetch dynamic configuration data ---
+export const getServices = async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM services WHERE is_active = true ORDER BY id ASC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
 
-  if (!email) {
-    return res.status(400).json({ error: 'Email is required for verification' });
+export const getStaff = async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM staff WHERE is_active = true ORDER BY id ASC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+// ---------------------------------------------
+
+export const getBookedTimes = async (req, res) => {
+  try {
+    const { date, staff_id } = req.query; 
+    if (!date || !staff_id) return res.status(400).json({ error: 'Date and staff ID are required' });
+
+    const result = await pool.query(
+      `SELECT TO_CHAR(appointment_time AT TIME ZONE 'Asia/Kolkata', 'HH24:MI') as time_slot
+       FROM bookings 
+       WHERE DATE(appointment_time AT TIME ZONE 'Asia/Kolkata') = $1
+       AND staff_id = $2
+       AND status IN ('queued', 'in-progress')`,
+      [date, staff_id]
+    );
+
+    res.json(result.rows.map(row => row.time_slot));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// 1. Request OTP (Updated payload)
+export const requestOtp = async (req, res) => {
+  const { customer_name, phone, email, service_id, staff_id, appointment_time } = req.body;
+
+  if (!email) return res.status(400).json({ error: 'Email is required for verification' });
+
+  // DEFENSE 1: Check if THIS specific staff member is booked at this time
+  const checkConflict = await pool.query(
+    `SELECT id FROM bookings WHERE appointment_time = $1 AND staff_id = $2 AND status IN ('queued', 'in-progress')`,
+    [appointment_time, staff_id]
+  );
+  if (checkConflict.rows.length > 0) {
+    return res.status(409).json({ error: 'This stylist is already booked at that time. Please choose another time or stylist.' });
   }
 
-  // Generate a 6-digit OTP
+  const serviceQuery = await pool.query(`SELECT name FROM services WHERE id = $1`, [service_id]);
+  const serviceName = serviceQuery.rows[0]?.name || 'a service';
+
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   
-  // Store OTP and booking data, expiring in 10 minutes
   otpStore.set(email, {
     otp,
-    bookingData: { customer_name, phone, email, service, appointment_time },
+    bookingData: { customer_name, phone, email, service_id, staff_id, appointment_time },
     expiresAt: Date.now() + 10 * 60 * 1000,
   });
 
   try {
-    // Send email using Brevo's REST API
+    // ... (Keep your Brevo email fetch logic exactly the same here) ...
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'api-key': process.env.BREVO_API_KEY
-      },
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'api-key': process.env.BREVO_API_KEY },
       body: JSON.stringify({
-        sender: { 
-          name: "Salon Booking System", 
-          email: process.env.EMAIL_USER // This must be the email you registered on Brevo with
-        },
+        sender: { name: "Salon Booking System", email: process.env.EMAIL_USER },
         to: [{ email: email, name: customer_name }],
         subject: 'Salon Booking OTP Verification',
         htmlContent: `
           <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-            <h2 style="color: #667eea; text-align: center;">Verify your appointment</h2>
+            <h2 style="color: #3E8914; text-align: center;">Verify your appointment</h2>
             <p>Hi <strong>${customer_name}</strong>,</p>
-            <p>Your OTP for booking a ${service} appointment is:</p>
-            <div style="background: #f4f4f4; padding: 15px; text-align: center; border-radius: 5px; margin: 20px 0;">
-              <strong style="font-size: 32px; letter-spacing: 5px; color: #333;">${otp}</strong>
+            <p>Your OTP for booking your <strong>${serviceName}</strong> appointment at <b>${new Date(appointment_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b> is:</p>
+            <div style="background: #E8FCCF; padding: 15px; text-align: center; border-radius: 5px; margin: 20px 0;">
+              <strong style="font-size: 32px; letter-spacing: 5px; color: #134611;">${otp}</strong>
             </div>
             <p style="color: #888; font-size: 12px; text-align: center;">This code will expire in 10 minutes.</p>
           </div>
@@ -51,56 +96,67 @@ export const requestOtp = async (req, res) => {
       })
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Brevo API Error:', errorData);
-      throw new Error('Failed to send OTP email via Brevo');
-    }
-    
+    if (!response.ok) throw new Error('Failed to send OTP email via Brevo');
     res.status(200).json({ message: 'OTP sent successfully' });
   } catch (err) {
-    console.error('Email error:', err);
     res.status(500).json({ error: 'Failed to send OTP email' });
   }
 };
 
-// 2. Verify OTP and Create Booking
+// 2. Verify OTP and Create Booking (Updated INSERT)
 export const verifyOtpAndBook = async (req, res) => {
   const { email, otp } = req.body;
   const record = otpStore.get(email);
 
-  if (!record) {
-    return res.status(400).json({ error: 'No OTP requested for this email' });
-  }
+  if (!record) return res.status(400).json({ error: 'No OTP requested for this email' });
   if (Date.now() > record.expiresAt) {
     otpStore.delete(email);
     return res.status(400).json({ error: 'OTP has expired' });
   }
-  if (record.otp !== otp) {
-    return res.status(400).json({ error: 'Invalid OTP' });
-  }
+  if (record.otp !== otp) return res.status(400).json({ error: 'Invalid OTP' });
 
-  const { customer_name, phone, service, appointment_time } = record.bookingData;
+  const { customer_name, phone, service_id, staff_id, appointment_time } = record.bookingData;
+
   try {
+    // DEFENSE 2: Final check right before insert (with staff_id)
+    const checkConflict = await pool.query(
+      `SELECT id FROM bookings WHERE appointment_time = $1 AND staff_id = $2 AND status IN ('queued', 'in-progress')`,
+      [appointment_time, staff_id]
+    );
+    
+    if (checkConflict.rows.length > 0) {
+      otpStore.delete(email); 
+      return res.status(409).json({ error: 'Sorry, this stylist was just booked by someone else for that time. Please start over.' });
+    }
+
     const newBooking = await pool.query(
-      'INSERT INTO bookings (customer_name, phone, email, service, appointment_time) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [customer_name, phone, email, service, appointment_time]
+      'INSERT INTO bookings (customer_name, phone, email, service_id, staff_id, appointment_time) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [customer_name, phone, email, service_id, staff_id, appointment_time]
     );
     
     otpStore.delete(email);
     res.status(201).json(newBooking.rows[0]);
   } catch (err) {
-    console.error(err.message);
     res.status(500).send('Server Error');
   }
 };
 
+// --- UPDATED JOINS: These queries alias s.name to 'service' so your frontend code doesn't break! ---
+const bookingJoinQuery = `
+  SELECT b.id, b.customer_name, b.phone, b.email, b.appointment_time, b.status, 
+         b.service_id, b.staff_id,
+         s.name as service, s.price as service_price, s.duration_minutes,
+         st.name as staff_name
+  FROM bookings b
+  JOIN services s ON b.service_id = s.id
+  JOIN staff st ON b.staff_id = st.id
+`;
+
 export async function listBookings(req, res) {
   try {
-    const result = await pool.query(`SELECT * FROM bookings ORDER BY appointment_time ASC`);
+    const result = await pool.query(`${bookingJoinQuery} ORDER BY b.appointment_time ASC`);
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 }
@@ -109,24 +165,20 @@ export async function getQueue(req, res) {
   try {
     const all = req.query.all === '1' || req.query.all === 'true';
     if (all) {
-      const result = await pool.query(
-        `SELECT * FROM bookings WHERE status IN ('queued', 'in-progress') ORDER BY appointment_time ASC`
-      );
+      const result = await pool.query(`${bookingJoinQuery} WHERE b.status IN ('queued', 'in-progress') ORDER BY b.appointment_time ASC`);
       return res.json(result.rows);
     }
-
     const now = new Date().toISOString();
     const result = await pool.query(
-      `SELECT * FROM bookings 
-       WHERE status IN ('queued', 'in-progress') 
-       AND (appointment_time >= $1 OR status = 'in-progress')
-       AND DATE(appointment_time AT TIME ZONE 'Asia/Kolkata') = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::DATE
-       ORDER BY appointment_time ASC`,
+      `${bookingJoinQuery}
+       WHERE b.status IN ('queued', 'in-progress') 
+       AND (b.appointment_time >= $1 OR b.status = 'in-progress')
+       AND DATE(b.appointment_time AT TIME ZONE 'Asia/Kolkata') = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')::DATE
+       ORDER BY b.appointment_time ASC`,
       [now]
     );
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 }
@@ -134,20 +186,15 @@ export async function getQueue(req, res) {
 export async function updateBooking(req, res) {
   try {
     const { id } = req.params;
-    const { customer_name, phone, service, appointment_time, status } = req.body;
-
+    // Admin can now update service_id and status
+    const { customer_name, phone, service_id, appointment_time, status } = req.body;
     const result = await pool.query(
-      `UPDATE bookings SET customer_name = $1, phone = $2, service = $3, appointment_time = $4, status = $5 WHERE id = $6 RETURNING *`,
-      [customer_name, phone || null, service, appointment_time, status, id]
+      `UPDATE bookings SET customer_name = $1, phone = $2, service_id = $3, appointment_time = $4, status = $5 WHERE id = $6 RETURNING *`,
+      [customer_name, phone || null, service_id, appointment_time, status, id]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Booking not found' });
-    }
-
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Booking not found' });
     res.json(result.rows[0]);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 }
@@ -156,14 +203,330 @@ export async function deleteBooking(req, res) {
   try {
     const { id } = req.params;
     const result = await pool.query(`DELETE FROM bookings WHERE id = $1 RETURNING *`, [id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Booking not found' });
-    }
-
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Booking not found' });
     res.json({ message: 'Booking deleted', booking: result.rows[0] });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 }
+
+export const getBusinessHours = async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT * FROM business_hours ORDER BY day_of_week ASC`);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const updateBusinessHours = async (req, res) => {
+  try {
+    const { day_of_week, is_closed, open_time, close_time } = req.body;
+    await pool.query(
+      `UPDATE business_hours SET is_closed = $1, open_time = $2, close_time = $3 WHERE day_of_week = $4`,
+      [is_closed, open_time, close_time, day_of_week]
+    );
+    res.json({ message: 'Hours updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const getBlockedDates = async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT id, TO_CHAR(blocked_date, 'YYYY-MM-DD') as blocked_date, reason FROM blocked_dates ORDER BY blocked_date ASC`);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const addBlockedDate = async (req, res) => {
+  try {
+    const { blocked_date, reason } = req.body;
+    const result = await pool.query(
+      `INSERT INTO blocked_dates (blocked_date, reason) VALUES ($1, $2) RETURNING id, TO_CHAR(blocked_date, 'YYYY-MM-DD') as blocked_date, reason`,
+      [blocked_date, reason]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(400).json({ error: 'This date is already blocked.' });
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const deleteBlockedDate = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query(`DELETE FROM blocked_dates WHERE id = $1`, [id]);
+    res.json({ message: 'Date unblocked successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+
+// Initialize Razorpay Instance
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
+
+// Create a Razorpay Order (WITH DOUBLE-BOOKING DEFENSE 1)
+export const createPaymentOrder = async (req, res) => {
+  try {
+    const { service_id, staff_id, appointment_time } = req.body;
+
+    // DEFENSE 1: Check if slot is already booked BEFORE generating a payment order
+    const checkConflict = await pool.query(
+      `SELECT id FROM bookings WHERE appointment_time = $1 AND staff_id = $2 AND status IN ('queued', 'in-progress')`,
+      [appointment_time, staff_id]
+    );
+
+    if (checkConflict.rows.length > 0) {
+      return res.status(409).json({ error: 'This stylist was just booked for this time. Please select another slot.' });
+    }
+
+    // Fetch the service price from database
+    const serviceRes = await pool.query(`SELECT price FROM services WHERE id = $1`, [service_id]);
+    if (serviceRes.rows.length === 0) return res.status(404).json({ error: 'Service not found' });
+
+    const fullPrice = Number(serviceRes.rows[0].price);
+    const depositAmount = Math.round(fullPrice * 0.30); // 30% deposit
+
+    // Create Razorpay Order
+    const options = {
+      amount: depositAmount * 100, 
+      currency: 'INR',
+      receipt: `receipt_${Date.now()}`,
+    };
+
+    const order = await razorpay.orders.create(options);
+    
+    res.json({
+      order_id: order.id,
+      deposit_amount: depositAmount,
+      full_price: fullPrice,
+      currency: order.currency,
+      key_id: process.env.RAZORPAY_KEY_ID
+    });
+  } catch (err) {
+    console.error('Razorpay Order Error:', err);
+    res.status(500).json({ error: 'Failed to create payment order' });
+  }
+};
+
+// Verify Payment Signature & Confirm Booking (WITH DOUBLE-BOOKING DEFENSE 2)
+export const verifyPaymentAndBook = async (req, res) => {
+  const { 
+    razorpay_order_id, 
+    razorpay_payment_id, 
+    razorpay_signature,
+    bookingData 
+  } = req.body;
+
+  // Verify Razorpay Signature
+  const body = razorpay_order_id + '|' + razorpay_payment_id;
+  const expectedSignature = crypto
+    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+    .update(body.toString())
+    .digest('hex');
+
+  if (expectedSignature !== razorpay_signature) {
+    return res.status(400).json({ error: 'Invalid payment signature. Transaction failed.' });
+  }
+
+  const { customer_name, phone, email, service_id, staff_id, appointment_time, deposit_amount } = bookingData;
+
+  try {
+    // Final check right before insert (Protects against 2 people paying at the exact same millisecond)
+    const checkConflict = await pool.query(
+      `SELECT id FROM bookings WHERE appointment_time = $1 AND staff_id = $2 AND status IN ('queued', 'in-progress')`,
+      [appointment_time, staff_id]
+    );
+    
+    if (checkConflict.rows.length > 0) {
+      // In a production app, you would hit Razorpay's Refund API here.
+      return res.status(409).json({ error: 'Slot was booked during payment processing. Please contact support for a refund.' });
+    }
+
+    // Save Booking to Database
+    const newBooking = await pool.query(
+      `INSERT INTO bookings 
+       (customer_name, phone, email, service_id, staff_id, appointment_time, status, payment_status, razorpay_order_id, razorpay_payment_id, amount_paid) 
+       VALUES ($1, $2, $3, $4, $5, $6, 'queued', 'paid', $7, $8, $9) 
+       RETURNING *`,
+      [customer_name, phone, email, service_id, staff_id, appointment_time, razorpay_order_id, razorpay_payment_id, deposit_amount]
+    );
+
+    // Fetch Service & Staff Names for the Email
+    const detailsRes = await pool.query(
+      `SELECT s.name as service_name, s.price as full_price, st.name as staff_name 
+       FROM services s, staff st 
+       WHERE s.id = $1 AND st.id = $2`,
+      [service_id, staff_id]
+    );
+    
+    const { service_name, full_price, staff_name } = detailsRes.rows[0];
+    const remainingAmount = Number(full_price) - Number(deposit_amount);
+    const formattedDate = new Date(appointment_time).toLocaleString('en-IN', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: 'Asia/Kolkata'
+    });
+
+    // Send Confirmation Email via Brevo API
+    fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': process.env.BREVO_API_KEY
+      },
+      body: JSON.stringify({
+        sender: { name: "SalonBooker", email: process.env.EMAIL_USER },
+        to: [{ email: email, name: customer_name }],
+        subject: `Booking Confirmed! - ${service_name} on ${formattedDate}`,
+        htmlContent: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
+            <div style="background-color: #134611; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+              <h1 style="color: #E8FCCF; margin: 0; font-size: 24px;">Booking Confirmed!</h1>
+            </div>
+            <div style="padding: 20px; color: #134611;">
+              <p style="font-size: 16px;">Hi <strong>${customer_name}</strong>,</p>
+              <p>Thank you for choosing us! Your appointment has been successfully scheduled.</p>
+              
+              <div style="background-color: #f4fbf0; border-left: 4px solid #3E8914; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                <p style="margin: 5px 0;"><strong>Service:</strong> ${service_name}</p>
+                <p style="margin: 5px 0;"><strong>Stylist:</strong> ${staff_name}</p>
+                <p style="margin: 5px 0;"><strong>Date & Time:</strong> ${formattedDate}</p>
+              </div>
+
+              <h3 style="border-bottom: 1px solid #ddd; padding-bottom: 8px; color: #134611;">Payment Summary</h3>
+              <table style="width: 100%; text-align: left; font-size: 14px;">
+                <tr><td style="padding: 5px 0;">Total Service Price:</td><td style="text-align: right;"><strong>₹${full_price}</strong></td></tr>
+                <tr><td style="padding: 5px 0;">30% Deposit Paid:</td><td style="text-align: right; color: #3E8914;"><strong>- ₹${deposit_amount}</strong></td></tr>
+                <tr style="border-top: 1px solid #eee;"><td style="padding: 10px 0; font-size: 16px;"><strong>Remaining Due at Salon:</strong></td><td style="text-align: right; font-size: 16px; color: #134611;"><strong>₹${remainingAmount}</strong></td></tr>
+              </table>
+            </div>
+          </div>
+        `
+      })
+    }).catch(err => console.error("Brevo Email Sending Error:", err));
+
+    res.status(201).json(newBooking.rows[0]);
+  } catch (err) {
+    console.error('Database Booking Error:', err);
+    res.status(500).json({ error: 'Failed to record booking after payment.' });
+  }
+};
+
+
+
+// Get ALL staff (including deactivated ones) for the admin panel
+export const getAdminStaff = async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM staff ORDER BY id ASC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Add new staff member
+export const addStaff = async (req, res) => {
+  try {
+    const { name } = req.body;
+    const result = await pool.query(
+      'INSERT INTO staff (name, is_active) VALUES ($1, true) RETURNING *',
+      [name]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Update staff member (Name or Active Status)
+export const updateStaff = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, is_active } = req.body;
+    const result = await pool.query(
+      'UPDATE staff SET name = $1, is_active = $2 WHERE id = $3 RETURNING *',
+      [name, is_active, id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Delete staff member (Only works if they have NO bookings)
+export const deleteStaff = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM staff WHERE id = $1', [id]);
+    res.json({ message: 'Staff deleted successfully' });
+  } catch (err) {
+    // 23503 is the PostgreSQL error code for Foreign Key Violation
+    if (err.code === '23503') { 
+      return res.status(400).json({ error: 'Cannot delete a stylist who has existing bookings. Please deactivate them instead.' });
+    }
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+
+// Fetch ALL services (including inactive) for Admin
+export const getAdminServices = async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM services ORDER BY id ASC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Create a new Service
+export const addService = async (req, res) => {
+  try {
+    const { name, price, duration_minutes } = req.body;
+    const result = await pool.query(
+      'INSERT INTO services (name, price, duration_minutes, is_active) VALUES ($1, $2, $3, true) RETURNING *',
+      [name, price, duration_minutes || 30]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Update existing Service (Name, Price, Duration, Active Status)
+export const updateService = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, price, duration_minutes, is_active } = req.body;
+    const result = await pool.query(
+      'UPDATE services SET name = $1, price = $2, duration_minutes = $3, is_active = $4 WHERE id = $5 RETURNING *',
+      [name, price, duration_minutes, is_active, id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Delete a Service (Catches FK Violation if bookings exist)
+export const deleteService = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM services WHERE id = $1', [id]);
+    res.json({ message: 'Service deleted successfully' });
+  } catch (err) {
+    if (err.code === '23503') { // Foreign Key Violation code in Postgres
+      return res.status(400).json({ error: 'Cannot delete a service that has existing bookings. Deactivate it instead.' });
+    }
+    res.status(500).json({ error: 'Server error' });
+  }
+};

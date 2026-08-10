@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, NavLink, useNavigate, useLocation } from 'react-router-dom';
 
+import SettingsPanel from './SettingsPanel.jsx';
 import AdminLogin from './AdminLogin.jsx';
 import AnalyticsDashboard from './AnalyticsDashboard.jsx';
 import AppointmentsList from './AppointmentsList.jsx';
+import StaffManagement from './StaffManagement.jsx';
+import ServicesManagement from './ServicesManagement.jsx';
 
 import logo from '../../assets/logo.svg';
-import { ArrowLeft, LogOut, LayoutDashboard, ListTodo, Search, Calendar, Filter } from 'lucide-react';
 
+import { ArrowLeft, LogOut, LayoutDashboard, ListTodo, Search, Calendar, Filter, Settings, Users, Scissors } from 'lucide-react';
 export default function AdminPanel({ apiBase }) {
-  // Use session storage so refreshing the page doesn't log the admin out!
-  const [adminMode, setAdminMode] = useState(sessionStorage.getItem('salonAdminAuth') === 'true');
-  const [loginError, setLoginError] = useState('');
+  // Authentication state using JWT from sessionStorage
+  const [token, setToken] = useState(sessionStorage.getItem('salonAdminToken') || null);
   const [bookings, setBookings] = useState([]);
   
   const navigate = useNavigate();
@@ -29,11 +31,19 @@ export default function AdminPanel({ apiBase }) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState(getTodayString());
 
-  const ADMIN_PASSWORD = 'admin123';
-
   const loadBookings = async () => {
+    if (!token) return;
     try {
-      const res = await fetch(`${apiBase}/bookings`);
+      // Secure fetch using the JWT token
+      const res = await fetch(`${apiBase}/bookings`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (res.status === 401 || res.status === 403) {
+        handleLogout(); // Token is invalid or expired
+        return;
+      }
+      
       const data = await res.json();
       setBookings(data);
     } catch (err) {
@@ -42,34 +52,31 @@ export default function AdminPanel({ apiBase }) {
   };
 
   useEffect(() => {
-    if (adminMode) {
+    if (token) {
       loadBookings();
-      const interval = setInterval(loadBookings, 5000);
+      const interval = setInterval(loadBookings, 5000); // Poll every 5 seconds
       return () => clearInterval(interval);
     }
-  }, [adminMode]);
+  }, [token]);
 
-  const handleLogin = (password) => {
-    if (password === ADMIN_PASSWORD) {
-      setAdminMode(true);
-      sessionStorage.setItem('salonAdminAuth', 'true');
-      setLoginError('');
-      navigate('/admin/dashboard');
-    } else {
-      setLoginError('Invalid password');
-    }
+  const handleLoginSuccess = (receivedToken) => {
+    setToken(receivedToken);
+    sessionStorage.setItem('salonAdminToken', receivedToken);
+    navigate('/admin/dashboard');
   };
 
   const handleLogout = () => {
-    setAdminMode(false);
-    sessionStorage.removeItem('salonAdminAuth');
+    setToken(null);
+    sessionStorage.removeItem('salonAdminToken');
     navigate('/');
   };
 
-  if (!adminMode) {
-    return <AdminLogin onLogin={handleLogin} onBack={() => navigate('/')} error={loginError} />;
+  // Render the secure login screen if the user has no valid token
+  if (!token) {
+    return <AdminLogin apiBase={apiBase} onLoginSuccess={handleLoginSuccess} onBack={() => navigate('/')} />;
   }
 
+  // Filter logic for the Appointments List view
   const filteredBookings = bookings.filter(booking => {
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
@@ -95,9 +102,10 @@ export default function AdminPanel({ apiBase }) {
   return (
     <div className="p-4 md:p-6 lg:p-8 bg-[#E8FCCF] min-h-screen max-w-[1600px] mx-auto overflow-x-hidden text-[#134611] relative">
       
-      <div className="absolute top-20 right-0 w-125 h-125 bg-[#96E072]/30 blur-[150px] rounded-full pointer-events-none -z-10"></div>
+      {/* Background ambient glow */}
+      <div className="absolute top-20 right-0 w-[500px] h-[500px] bg-[#96E072]/30 blur-[150px] rounded-full pointer-events-none -z-10"></div>
 
-      {/* Header */}
+      {/* Header (Glassmorphism) */}
       <div className="flex justify-between items-center mb-6 bg-[#134611]/90 backdrop-blur-md border border-[#134611] p-4 md:p-5 rounded-2xl shadow-lg gap-3">
         <div className="flex items-center gap-4 min-w-0">
           <button 
@@ -141,11 +149,28 @@ export default function AdminPanel({ apiBase }) {
           >
             <ListTodo size={18} /> <span className="hidden sm:inline">Appointments</span>
           </NavLink>
+          <NavLink 
+            to="/admin/settings"
+            className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+          >
+            <Settings size={18} /> <span className="hidden sm:inline">Work Hours</span>
+          </NavLink>
+          <NavLink 
+            to="/admin/staff"
+            className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+          >
+            <Users size={18} /> <span className="hidden sm:inline">Staff</span>
+          </NavLink>
+          <NavLink 
+            to="/admin/services"
+            className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+          >
+            <Scissors size={18} /> <span className="hidden sm:inline">Services</span>
+          </NavLink>
         </div>
 
-        {/* Filters */}
+        {/* Filters (Only visible on the Appointments page) */}
         <div className="flex flex-col md:flex-row items-center gap-3 w-full xl:w-auto p-2 xl:p-0">
-          {/* Only show Search and Status filters on the Appointments view */}
           {isAppointmentsPage && (
             <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
               <div className="relative w-full sm:w-auto md:w-56">
@@ -196,11 +221,26 @@ export default function AdminPanel({ apiBase }) {
         </div>
       </div>
 
-      {/* Routes setup for nested components */}
+      {/* Nested React Routes Configuration */}
       <Routes>
-        <Route path="dashboard" element={<AnalyticsDashboard bookings={filteredBookings} />} />
-        <Route path="appointments" element={<AppointmentsList bookings={filteredBookings} apiBase={apiBase} onRefresh={loadBookings} filters={{ searchTerm, statusFilter, dateFilter }} />} />
-        {/* Fallback route to bounce users to the dashboard if they manually enter /admin */}
+        <Route path="dashboard" element={<AnalyticsDashboard bookings={filteredBookings} />} />        
+        {/* Pass the token down to AppointmentsList so it can perform authenticated PUT/DELETE requests */}
+        <Route 
+          path="appointments" 
+          element={
+            <AppointmentsList 
+              bookings={filteredBookings} 
+              apiBase={apiBase} 
+              onRefresh={loadBookings} 
+              filters={{ searchTerm, statusFilter, dateFilter }} 
+              token={token} 
+            />
+          } 
+        />
+        <Route path="settings" element={<SettingsPanel apiBase={apiBase} token={token} />} />
+        <Route path="staff" element={<StaffManagement apiBase={apiBase} token={token} />} />
+        <Route path="services" element={<ServicesManagement apiBase={apiBase} token={token} />} />
+        {/* Fallback route: Redirect /admin to /admin/dashboard */}
         <Route path="*" element={<Navigate to="dashboard" replace />} />
       </Routes>
 

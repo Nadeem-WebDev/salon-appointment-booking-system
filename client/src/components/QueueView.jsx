@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Clock, RefreshCw, Scissors } from 'lucide-react';
+import { Clock, RefreshCw, Scissors, User } from 'lucide-react';
 
 export default function QueueView({ apiBase, refreshKey }) {
   const [queue, setQueue] = useState([]);
@@ -21,24 +21,35 @@ export default function QueueView({ apiBase, refreshKey }) {
 
   useEffect(() => {
     fetchQueue();
-    const iv = setInterval(fetchQueue, 10000);
+    const iv = setInterval(fetchQueue, 10000); // Poll every 10 seconds
     return () => clearInterval(iv);
-  }, [refreshKey]);
+  }, [refreshKey, apiBase]);
 
+  // Filter queue to only show appointments for the current day
   const displayQueue = queue.filter(booking => {
     const bookingDate = new Date(booking.appointment_time);
     const today = new Date();
     return bookingDate.toDateString() === today.toDateString();
   });
 
+  // Privacy function: Converts "Isabella Lopez" to "Isabella L."
+  const maskName = (fullName) => {
+    if (!fullName) return '';
+    const parts = fullName.trim().split(' ');
+    if (parts.length === 1) return parts[0]; 
+    return `${parts[0]} ${parts[parts.length - 1].charAt(0)}.`;
+  };
+
   if (loading && queue.length === 0) {
-    return <div className="text-center py-10 px-5 text-[#99582A] font-bold text-sm flex flex-col items-center gap-3">
-      <RefreshCw className="animate-spin" size={24} />
-      Loading live queue...
-    </div>;
+    return (
+      <div className="text-center py-10 px-5 text-[#3DA35D] font-bold text-sm flex flex-col items-center gap-3">
+        <RefreshCw className="animate-spin" size={24} />
+        Loading live queue...
+      </div>
+    );
   }
 
-const indicatorColors = {
+  const indicatorColors = {
     'queued': 'bg-[#96E072]',
     'in-progress': 'bg-[#3DA35D]',
     'completed': 'bg-[#3E8914]',
@@ -60,47 +71,92 @@ const indicatorColors = {
           <p className="text-base font-bold m-0">No appointments in the queue today</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3 md:max-h-125 overflow-y-auto pr-2 custom-scrollbar">
-          {displayQueue.map((booking, index) => (
-            <div key={booking.id} className="group flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white/70 backdrop-blur-md border border-[#3DA35D]/30 rounded-2xl transition-all duration-300 hover:shadow-[0_8px_20px_rgba(19,70,17,0.1)] hover:border-[#3E8914]">
+        <div className="flex flex-col gap-3 md:max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+          {displayQueue.map((booking, index) => {
+            
+            // --- NEW SMART WAIT TIME LOGIC ---
+          const getWaitTime = () => {
+              if (booking.status === 'in-progress') return 'Currently in chair';
               
-              <div className="flex items-center justify-between w-full sm:w-auto sm:flex-1 gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 flex items-center justify-center bg-[#134611] text-[#E8FCCF] rounded-xl font-bold text-sm shadow-sm group-hover:bg-[#3E8914] transition-colors">
-                    {index + 1}
+              const apptTime = new Date(booking.appointment_time);
+              const timeString = apptTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              const now = new Date();
+              
+              // 1. Calculate actual minutes until their appointment time
+              const minsUntilAppt = Math.ceil((apptTime - now) / 60000);
+              
+              // 2. Calculate delay caused by people ahead of them FOR THE SAME STYLIST
+              const peopleAhead = displayQueue.slice(0, index).filter(b => b.staff_id === booking.staff_id && b.status !== 'in-progress').length;
+              const queueDelay = peopleAhead * 20;
+
+              // 3. The wait is either the time until their appt, OR the queue delay
+              const waitMins = Math.max(minsUntilAppt, queueDelay, 0);
+
+              if (waitMins === 0) return `${timeString} • Next in chair`;
+              
+              if (waitMins >= 120) {
+                return `${timeString} • Later today`;
+              }
+              
+              return `${timeString} • Wait: ~${waitMins} mins`;
+            };
+
+            return (
+              <div key={booking.id} className="group flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white/70 backdrop-blur-md border border-[#3DA35D]/30 rounded-2xl transition-all duration-300 hover:shadow-[0_8px_20px_rgba(19,70,17,0.1)] hover:border-[#3E8914]">
+                
+                {/* Left Column / Top Row (Mobile) */}
+                <div className="flex items-center justify-between w-full sm:w-auto sm:flex-1 gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 flex items-center justify-center bg-[#134611] text-[#E8FCCF] rounded-xl font-bold text-sm shadow-sm group-hover:bg-[#3E8914] transition-colors">
+                      {index + 1}
+                    </div>
+                    <div className="font-bold text-[#134611] text-base truncate">
+                      {maskName(booking.customer_name)}
+                    </div>
                   </div>
-                  <div className="font-bold text-[#134611] text-base truncate">
-                    {booking.customer_name}
+
+                  {/* Mobile Status Indicator */}
+                  <div className="flex sm:hidden items-center gap-2 shrink-0">
+                    <div className={`w-2 h-2 rounded-full ${indicatorColors[booking.status]}`}></div>
+                    <div className={`px-2.5 py-1 text-[10px] rounded-md font-bold uppercase tracking-wide ${chipColors[booking.status]}`}>
+                      {booking.status.replace('-', ' ')}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex sm:hidden items-center gap-2 shrink-0">
-                  <div className={`w-2 h-2 rounded-full ${indicatorColors[booking.status]}`}></div>
-                  <div className={`px-2.5 py-1 text-[10px] rounded-md font-bold uppercase tracking-wide ${chipColors[booking.status]}`}>
+                {/* Badges Column */}
+                <div className="flex flex-wrap items-center gap-3 pl-13 sm:pl-0 sm:flex-1">
+                  {/* Service Badge */}
+                  <div className="flex items-center gap-1.5 text-[#134611] bg-[#E8FCCF]/60 px-2.5 py-1.5 rounded-lg text-xs font-bold border border-[#3DA35D]/30">
+                    <Scissors size={12} className="text-[#3E8914]"/> {booking.service}
+                  </div>
+                  
+                  {/* Staff/Stylist Badge */}
+                  <div className="flex items-center gap-1.5 text-[#134611] bg-[#96E072]/20 px-2.5 py-1.5 rounded-lg text-xs font-bold border border-[#96E072]/40">
+                    <User size={12} className="text-[#3E8914]"/> {booking.staff_name || 'Stylist'}
+                  </div>
+
+                  {/* Dynamic Smart Wait Time */}
+                  <div className="flex items-center gap-1.5 text-[#3DA35D] text-xs font-bold">
+                    <Clock size={12} /> 
+                    {getWaitTime()}
+                  </div>
+                </div>
+
+                {/* Desktop Status Indicator */}
+                <div className="hidden sm:flex items-center gap-3 shrink-0">
+                  <div className={`w-2.5 h-2.5 rounded-full ${indicatorColors[booking.status]}`}></div>
+                  <div className={`px-3 py-1.5 text-xs rounded-lg font-bold uppercase tracking-wider ${chipColors[booking.status]}`}>
                     {booking.status.replace('-', ' ')}
                   </div>
                 </div>
               </div>
-
-              <div className="flex flex-wrap items-center gap-3 pl-13 sm:pl-0 sm:flex-1">
-                <div className="flex items-center gap-1.5 text-[#134611] bg-[#E8FCCF]/60 px-2.5 py-1.5 rounded-lg text-xs font-bold border border-[#3DA35D]/30">
-                  <Scissors size={12} className="text-[#3E8914]"/> {booking.service}
-                </div>
-                <div className="flex items-center gap-1.5 text-[#3DA35D] text-xs font-bold">
-                  <Clock size={12} /> {new Date(booking.appointment_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-              </div>
-
-              <div className="hidden sm:flex items-center gap-3 shrink-0">
-                <div className={`w-2.5 h-2.5 rounded-full ${indicatorColors[booking.status]}`}></div>
-                <div className={`px-3 py-1.5 text-xs rounded-lg font-bold uppercase tracking-wider ${chipColors[booking.status]}`}>
-                  {booking.status.replace('-', ' ')}
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
+      
+      {/* Auto-Refresh Indicator */}
       <div className="flex items-center justify-center gap-2 text-[#3DA35D] text-xs mt-6 pt-4 border-t border-[#3DA35D]/30 font-bold">
         <RefreshCw size={12} className="animate-spin" style={{ animationDuration: '3s' }} /> 
         Live updating every 10 seconds

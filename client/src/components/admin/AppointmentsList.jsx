@@ -7,7 +7,7 @@ const badgeColors = {
   'cancelled': 'bg-red-500/20 text-red-800 border border-red-500/30'
 };
 
-export default function AppointmentsList({ bookings, apiBase, onRefresh, filters }) {
+export default function AppointmentsList({ bookings, apiBase, onRefresh, filters, token }) {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [message, setMessage] = useState('');
@@ -32,7 +32,6 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
     return `${dateStr} • ${timeStr}`;
   };
 
-  // Helper to format ISO string for <input type="datetime-local">
   const formatForInput = (isoString) => {
     if (!isoString) return '';
     const d = new Date(isoString);
@@ -44,7 +43,10 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
     try {
       const res = await fetch(`${apiBase}/bookings/${editingId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify(editForm)
       });
       if (!res.ok) throw new Error('Failed to update');
@@ -61,7 +63,12 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
   async function handleDelete(id) {
     if (window.confirm('Delete this booking?')) {
       try {
-        const res = await fetch(`${apiBase}/bookings/${id}`, { method: 'DELETE' });
+        const res = await fetch(`${apiBase}/bookings/${id}`, { 
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}` 
+          }
+        });
         if (!res.ok) throw new Error('Failed to delete');
         setMessage('Booking deleted');
         onRefresh();
@@ -82,7 +89,7 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
       </div>
 
       {/* --- MOBILE CARD VIEW --- */}
-      <div className="grid grid-cols-1 gap-4 md:hidden">
+      <div className="grid grid-cols-1 gap-4 lg:hidden">
         {currentBookings.length === 0 && (
           <div className="text-center py-8 text-[#134611]/60 bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_4px_20px_rgba(19,70,17,0.05)] font-bold">No appointments found.</div>
         )}
@@ -119,24 +126,28 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
                 {editingId === booking.id ? (
                   <select
                     className="w-full py-1 px-2 border border-[#3DA35D] rounded-lg text-xs bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072]"
-                    value={editForm.service}
-                    onChange={e => setEditForm({ ...editForm, service: e.target.value })}
+                    value={editForm.service_id}
+                    onChange={e => setEditForm({ ...editForm, service_id: e.target.value })}
                   >
-                    <option value="Haircut">Haircut</option>
-                    <option value="Hair Color">Hair Color</option>
-                    <option value="Styling">Styling</option>
-                    <option value="Treatment">Hair Treatment</option>
-                    <option value="Beard Trim">Beard Trim</option>
+                    <option value="1">Haircut</option>
+                    <option value="2">Hair Color</option>
+                    <option value="3">Styling</option>
+                    <option value="4">Hair Treatment</option>
+                    <option value="5">Beard Trim</option>
                   </select>
                 ) : (
                   <p className="font-bold m-0 truncate">{booking.service}</p>
                 )}
               </div>
               <div className="min-w-0">
+                <p className="text-[11px] text-[#3E8914] font-bold uppercase tracking-wider m-0 mb-1">Stylist</p>
+                <p className="font-bold m-0 truncate">{booking.staff_name || '-'}</p>
+              </div>
+              <div className="min-w-0">
                 <p className="text-[11px] text-[#3E8914] font-bold uppercase tracking-wider m-0 mb-1">Phone</p>
                 <p className="font-bold m-0 truncate">{booking.phone || '-'}</p>
               </div>
-              <div className="col-span-2 min-w-0">
+              <div className="min-w-0">
                 <p className="text-[11px] text-[#3E8914] font-bold uppercase tracking-wider m-0 mb-1">Time</p>
                 {editingId === booking.id ? (
                   <input
@@ -169,23 +180,25 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
       </div>
 
       {/* --- DESKTOP TABLE VIEW --- */}
-      <div className="hidden md:block bg-white/50 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_8px_32px_rgba(19,70,17,0.06)] overflow-hidden overflow-x-auto">
-        <table className="w-full border-collapse min-w-250">
+      <div className="hidden lg:block bg-white/50 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_8px_32px_rgba(19,70,17,0.06)] overflow-hidden overflow-x-auto">
+        <table className="w-full border-collapse min-w-[1000px]">
           <thead className="bg-[#134611] text-[#E8FCCF]">
             <tr>
-              <th className="p-4 text-left font-bold text-sm tracking-wide">ID</th>
+              <th className="p-4 text-left font-bold text-sm tracking-wide rounded-tl-2xl">ID</th>
               <th className="p-4 text-left font-bold text-sm tracking-wide">Customer</th>
               <th className="p-4 text-left font-bold text-sm tracking-wide">Email</th>
               <th className="p-4 text-left font-bold text-sm tracking-wide">Phone</th>
               <th className="p-4 text-left font-bold text-sm tracking-wide">Service</th>
+              {/* NEW COLUMN */}
+              <th className="p-4 text-left font-bold text-sm tracking-wide">Stylist</th>
               <th className="p-4 text-left font-bold text-sm tracking-wide">Appointment Time</th>
               <th className="p-4 text-left font-bold text-sm tracking-wide">Status</th>
-              <th className="p-4 text-left font-bold text-sm tracking-wide">Actions</th>
+              <th className="p-4 text-left font-bold text-sm tracking-wide rounded-tr-2xl">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#3DA35D]/20">
             {currentBookings.length === 0 && (
-              <tr><td colSpan="8" className="p-8 text-center text-[#134611]/60 font-bold">No appointments found.</td></tr>
+              <tr><td colSpan="9" className="p-8 text-center text-[#134611]/60 font-bold">No appointments found.</td></tr>
             )}
             {currentBookings.map(booking => (
               <tr key={booking.id} className="transition-colors duration-200 hover:bg-white/40">
@@ -197,19 +210,26 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
                 <td className="p-4 text-sm align-middle">
                   {editingId === booking.id ? (
                     <select
-                      className="py-1.5 px-2 border border-[#3DA35D] rounded-lg text-sm bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072] min-w-32.5"
-                      value={editForm.service}
-                      onChange={e => setEditForm({ ...editForm, service: e.target.value })}
+                      className="py-1.5 px-2 border border-[#3DA35D] rounded-lg text-sm bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072] min-w-[130px]"
+                      value={editForm.service_id}
+                      onChange={e => setEditForm({ ...editForm, service_id: e.target.value })}
                     >
-                      <option value="Haircut">Haircut</option>
-                      <option value="Hair Color">Hair Color</option>
-                      <option value="Styling">Styling</option>
-                      <option value="Treatment">Hair Treatment</option>
-                      <option value="Beard Trim">Beard Trim</option>
+                      <option value="1">Haircut</option>
+                      <option value="2">Hair Color</option>
+                      <option value="3">Styling</option>
+                      <option value="4">Hair Treatment</option>
+                      <option value="5">Beard Trim</option>
                     </select>
                   ) : (
                     <span className="font-bold text-[#134611] bg-[#96E072]/20 rounded-lg inline-block px-3 py-1 border border-[#96E072]/40 whitespace-nowrap">{booking.service}</span>
                   )}
+                </td>
+
+                {/* NEW STYLIST DATA CELL */}
+                <td className="p-4 text-sm font-bold text-[#134611] align-middle">
+                  <span className="font-bold text-[#3E8914] flex items-center gap-1.5 whitespace-nowrap">
+                     {booking.staff_name || '-'}
+                  </span>
                 </td>
 
                 <td className="p-4 text-sm text-[#134611] font-bold whitespace-nowrap align-middle">
@@ -226,7 +246,7 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
                       }}
                     />
                   ) : (
-                    formatDateTime(booking.appointment_time)
+                    <div>{formatDateTime(booking.appointment_time)}</div>
                   )}
                 </td>
 
@@ -265,7 +285,7 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
         </table>
       </div>
 
-      {/* --- MOBILE PAGINATION FIX --- */}
+      {/* --- PAGINATION --- */}
       {bookings.length > itemsPerPage && (
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3 mt-6 bg-white/50 backdrop-blur-xl border border-white/60 p-4 rounded-2xl shadow-[0_4px_20px_rgba(19,70,17,0.05)]">
           <button
