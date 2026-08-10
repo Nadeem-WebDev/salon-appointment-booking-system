@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, CalendarX, Clock, Trash2 } from 'lucide-react';
+import { data } from 'react-router-dom';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export default function SettingsPanel({ apiBase, token }) {
   const [hours, setHours] = useState([]);
   const [blockedDates, setBlockedDates] = useState([]);
-  const [newBlockDate, setNewBlockDate] = useState('');
+  const [newBlockDate, setNewBlockDate] = useState(new Date().toISOString().split('T')[0]);
   const [newBlockReason, setNewBlockReason] = useState('');
   const [message, setMessage] = useState({ text: '', type: '' });
 
