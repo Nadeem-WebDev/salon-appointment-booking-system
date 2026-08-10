@@ -88,7 +88,7 @@ export default function SettingsPanel({ apiBase, token }) {
     }
   };
 
-  const inputClass = "p-2 bg-white/70 border border-[#3DA35D]/50 rounded-lg text-sm text-[#134611] font-bold focus:outline-none focus:ring-2 focus:ring-[#96E072]";
+  const inputClass = "w-full p-2 bg-white/70 border border-[#3DA35D]/50 rounded-lg text-sm text-[#134611] font-bold focus:outline-none focus:ring-2 focus:ring-[#96E072]";
 
   return (
     <div className="animate-slideIn grid grid-cols-1 lg:grid-cols-2 gap-8">
