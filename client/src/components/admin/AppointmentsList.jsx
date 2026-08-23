@@ -7,7 +7,8 @@ const badgeColors = {
   'cancelled': 'bg-red-500/20 text-red-800 border border-red-500/30'
 };
 
-export default function AppointmentsList({ bookings, apiBase, onRefresh, filters, token }) {
+// Notice the new 'role' prop added here
+export default function AppointmentsList({ bookings, apiBase, onRefresh, filters, token, role }) {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [message, setMessage] = useState('');
@@ -171,7 +172,10 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
               ) : (
                 <>
                   <button className="flex-1 py-2.5 rounded-xl font-bold text-[#E8FCCF] bg-[#3E8914] border-none shadow-sm cursor-pointer hover:bg-[#3E8914]/90 transition-colors" onClick={() => { setEditingId(booking.id); setEditForm(booking); }}>Edit</button>
-                  <button className="flex-1 py-2.5 rounded-xl font-bold text-white bg-red-500/90 border-none shadow-sm cursor-pointer hover:bg-red-600 transition-colors" onClick={() => handleDelete(booking.id)}>Delete</button>
+                  {/* RBAC: Hide Delete button from staff on mobile */}
+                  {role === 'admin' && (
+                    <button className="flex-1 py-2.5 rounded-xl font-bold text-white bg-red-500/90 border-none shadow-sm cursor-pointer hover:bg-red-600 transition-colors" onClick={() => handleDelete(booking.id)}>Delete</button>
+                  )}
                 </>
               )}
             </div>
@@ -189,7 +193,6 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
               <th className="p-4 text-left font-bold text-sm tracking-wide">Email</th>
               <th className="p-4 text-left font-bold text-sm tracking-wide">Phone</th>
               <th className="p-4 text-left font-bold text-sm tracking-wide">Service</th>
-              {/* NEW COLUMN */}
               <th className="p-4 text-left font-bold text-sm tracking-wide">Stylist</th>
               <th className="p-4 text-left font-bold text-sm tracking-wide">Appointment Time</th>
               <th className="p-4 text-left font-bold text-sm tracking-wide">Status</th>
@@ -225,7 +228,6 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
                   )}
                 </td>
 
-                {/* NEW STYLIST DATA CELL */}
                 <td className="p-4 text-sm font-bold text-[#134611] align-middle">
                   <span className="font-bold text-[#3E8914] flex items-center gap-1.5 whitespace-nowrap">
                      {booking.staff_name || '-'}
@@ -275,7 +277,10 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
                   ) : (
                     <div className="flex gap-2">
                       <button className="py-2 px-4 rounded-xl font-bold text-[#E8FCCF] bg-[#3E8914] hover:bg-[#3DA35D] transition-colors border-none cursor-pointer" onClick={() => { setEditingId(booking.id); setEditForm(booking); }}>Edit</button>
-                      <button className="py-2 px-4 rounded-xl font-bold text-white bg-red-500/90 hover:bg-red-600 transition-colors border-none cursor-pointer" onClick={() => handleDelete(booking.id)}>Delete</button>
+                      {/* RBAC: Hide Delete button from staff on desktop */}
+                      {role === 'admin' && (
+                        <button className="py-2 px-4 rounded-xl font-bold text-white bg-red-500/90 hover:bg-red-600 transition-colors border-none cursor-pointer" onClick={() => handleDelete(booking.id)}>Delete</button>
+                      )}
                     </div>
                   )}
                 </td>

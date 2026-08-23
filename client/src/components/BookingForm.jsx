@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { CalendarX } from 'lucide-react';
 
 export default function BookingForm({ apiBase, onBooked }) {
   // Form States
@@ -76,15 +77,30 @@ export default function BookingForm({ apiBase, onBooked }) {
     fetchBookedSlots();
   }, [appointmentDate, staffId, apiBase]);
 
+  // --- NEW: Filter out past holidays to only show upcoming ones in the banner ---
+  const upcomingClosures = useMemo(() => {
+    return blockedDates.filter(bd => bd.blocked_date >= todayString);
+  }, [blockedDates, todayString]);
+
+  // Format date nicely for the banner (e.g., "Aug 15, 2026")
+  const formatHolidayDate = (dateString) => {
+    const [year, month, day] = dateString.split('-');
+    const d = new Date(year, month - 1, day);
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+
   // Handle Date Selection & Holiday Validation
   const handleDateChange = (e) => {
     const selectedDate = e.target.value;
     setMessage('');
     
     // 1. Check if it's a blocked date (Holiday/Renovation)
-    if (blockedDates.some(bd => bd.blocked_date === selectedDate)) {
+    // --- NEW: Find the specific blocked date to extract the reason ---
+    const blockedDateEntry = blockedDates.find(bd => bd.blocked_date === selectedDate);
+    
+    if (blockedDateEntry) {
       setMessageType('error');
-      setMessage('Sorry, the salon is closed on this date.');
+      setMessage(`Sorry, we are closed on this date. Reason: ${blockedDateEntry.reason}`);
       setAppointmentDate('');
       setAppointmentSlot('');
       return;
@@ -158,7 +174,7 @@ export default function BookingForm({ apiBase, onBooked }) {
     return `${displayHour}:${m} ${ampm}`;
   };
 
-  // --- NEW: Handle Razorpay Checkout & Booking ---
+  // Handle Razorpay Checkout & Booking (Double Booking Protected)
   async function handlePaymentCheckout(e) {
     e.preventDefault(); 
     setLoading(true); 
@@ -172,12 +188,12 @@ export default function BookingForm({ apiBase, onBooked }) {
     }
 
     try {
-      // Generate the final time string FIRST
+      // 1. Generate the final time string FIRST
       const [year, month, day] = appointmentDate.split('-');
       const [hour, minute] = appointmentSlot.split(':');
       const finalAppointmentTime = new Date(year, month - 1, day, hour, minute).toISOString();
 
-      // 2. Ask backend to create a Razorpay Order (Now sending staff and time for validation)
+      // 2. Ask backend to create a Razorpay Order (Sends staff and time for validation)
       const orderRes = await fetch(`${apiBase}/bookings/create-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -189,7 +205,6 @@ export default function BookingForm({ apiBase, onBooked }) {
       });
       const orderData = await orderRes.json();
 
-      // Catch the 409 Conflict if the slot is already taken
       if (orderRes.status === 409) {
         setAppointmentSlot('');
         throw new Error(orderData.error);
@@ -197,8 +212,7 @@ export default function BookingForm({ apiBase, onBooked }) {
       
       if (!orderRes.ok) throw new Error(orderData.error);
 
-
-      // Configure Razorpay Popup Options
+      // 3. Configure Razorpay Popup Options
       const options = {
         key: orderData.key_id,
         amount: orderData.deposit_amount * 100, // Amount in paise
@@ -208,7 +222,7 @@ export default function BookingForm({ apiBase, onBooked }) {
         order_id: orderData.order_id,
         handler: async function (response) {
           
-          // 3. Verify Payment on Backend & Save Booking
+          // 4. Verify Payment on Backend & Save Booking
           const verifyRes = await fetch(`${apiBase}/bookings/verify-payment`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -232,8 +246,7 @@ export default function BookingForm({ apiBase, onBooked }) {
             if (typeof onBooked === 'function') onBooked();
             setMessageType('success');
             setMessage(`✓ Deposit of ₹${orderData.deposit_amount} received! Appointment confirmed.`);
-            // Reset Form
-            setCustomerName(''); setPhone(''); setEmail(''); setAppointmentDate(new Date().toLocaleDateString('en-CA')); setAppointmentSlot('');
+            setCustomerName(''); setPhone(''); setEmail(''); setAppointmentDate(''); setAppointmentSlot('');
           } else {
             setMessageType('error');
             setMessage('Payment verification failed. Please contact support.');
@@ -275,6 +288,24 @@ export default function BookingForm({ apiBase, onBooked }) {
 
   return (
     <div className="grid gap-4 md:gap-5 relative animate-slideIn">
+      
+      {/* --- NEW: Upcoming Closures / Holiday Banner --- */}
+      {upcomingClosures.length > 0 && (
+        <div className="bg-amber-100/60 backdrop-blur-sm border border-amber-300/60 rounded-xl p-4 shadow-sm mb-2">
+          <div className="flex items-center gap-2 text-amber-800 font-black mb-2 text-sm">
+            <CalendarX size={18} />
+            Upcoming Closures & Holidays
+          </div>
+          <ul className="m-0 pl-6 list-disc space-y-1">
+            {upcomingClosures.map(holiday => (
+              <li key={holiday.id} className="text-sm font-bold text-amber-900/80">
+                <span className="text-amber-900">{formatHolidayDate(holiday.blocked_date)}</span> — {holiday.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <form onSubmit={handlePaymentCheckout} className="grid gap-4 md:gap-5">
         <div className="flex flex-col">
           <label htmlFor="name" className="text-[14px] font-bold text-[#134611] mb-2">Full Name *</label>

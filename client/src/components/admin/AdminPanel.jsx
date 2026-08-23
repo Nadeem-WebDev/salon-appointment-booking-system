@@ -9,11 +9,11 @@ import StaffManagement from './StaffManagement.jsx';
 import ServicesManagement from './ServicesManagement.jsx';
 
 import logo from '../../assets/logo.svg';
-
 import { ArrowLeft, LogOut, LayoutDashboard, ListTodo, Search, Calendar, Filter, Settings, Users, Scissors } from 'lucide-react';
+
 export default function AdminPanel({ apiBase }) {
-  // Authentication state using JWT from sessionStorage
   const [token, setToken] = useState(sessionStorage.getItem('salonAdminToken') || null);
+  const [role, setRole] = useState(sessionStorage.getItem('salonAdminRole') || 'admin');
   const [bookings, setBookings] = useState([]);
   
   const navigate = useNavigate();
@@ -34,13 +34,12 @@ export default function AdminPanel({ apiBase }) {
   const loadBookings = async () => {
     if (!token) return;
     try {
-      // Secure fetch using the JWT token
       const res = await fetch(`${apiBase}/bookings`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
       if (res.status === 401 || res.status === 403) {
-        handleLogout(); // Token is invalid or expired
+        handleLogout(); 
         return;
       }
       
@@ -54,29 +53,39 @@ export default function AdminPanel({ apiBase }) {
   useEffect(() => {
     if (token) {
       loadBookings();
-      const interval = setInterval(loadBookings, 5000); // Poll every 5 seconds
+      const interval = setInterval(loadBookings, 5000); 
       return () => clearInterval(interval);
     }
   }, [token]);
 
-  const handleLoginSuccess = (receivedToken) => {
+  // NEW: Handle saving the role on login
+  const handleLoginSuccess = (receivedToken, receivedRole) => {
     setToken(receivedToken);
+    setRole(receivedRole || 'admin');
+    
     sessionStorage.setItem('salonAdminToken', receivedToken);
-    navigate('/admin/dashboard');
+    sessionStorage.setItem('salonAdminRole', receivedRole || 'admin');
+    
+    // Redirect staff directly to appointments
+    if (receivedRole === 'staff') {
+      navigate('/admin/appointments');
+    } else {
+      navigate('/admin/dashboard');
+    }
   };
 
   const handleLogout = () => {
     setToken(null);
+    setRole(null);
     sessionStorage.removeItem('salonAdminToken');
+    sessionStorage.removeItem('salonAdminRole');
     navigate('/');
   };
 
-  // Render the secure login screen if the user has no valid token
   if (!token) {
     return <AdminLogin apiBase={apiBase} onLoginSuccess={handleLoginSuccess} onBack={() => navigate('/')} />;
   }
 
-  // Filter logic for the Appointments List view
   const filteredBookings = bookings.filter(booking => {
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
@@ -102,10 +111,8 @@ export default function AdminPanel({ apiBase }) {
   return (
     <div className="p-4 md:p-6 lg:p-8 bg-[#E8FCCF] min-h-screen max-w-[1600px] mx-auto overflow-x-hidden text-[#134611] relative">
       
-      {/* Background ambient glow */}
       <div className="absolute top-20 right-0 w-[500px] h-[500px] bg-[#96E072]/30 blur-[150px] rounded-full pointer-events-none -z-10"></div>
 
-      {/* Header (Glassmorphism) */}
       <div className="flex justify-between items-center mb-6 bg-[#134611]/90 backdrop-blur-md border border-[#134611] p-4 md:p-5 rounded-2xl shadow-lg gap-3">
         <div className="flex items-center gap-4 min-w-0">
           <button 
@@ -120,7 +127,7 @@ export default function AdminPanel({ apiBase }) {
           </div>
           
           <h2 className="m-0 text-[#E8FCCF] text-lg md:text-xl font-black truncate tracking-tight">
-            Admin Control Center
+            {role === 'staff' ? 'Staff Portal' : 'Admin Control Center'}
           </h2>
         </div>
         
@@ -132,44 +139,53 @@ export default function AdminPanel({ apiBase }) {
         </button>
       </div>
 
-      {/* Control Bar (Glassmorphism) */}
       <div className="mb-8 bg-white/50 backdrop-blur-xl border border-[#3DA35D]/30 p-2 rounded-2xl shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         
-        {/* React Router NavLinks */}
         <div className="flex p-1 bg-white/50 rounded-xl w-full xl:w-auto border border-[#3DA35D]/20">
-          <NavLink 
-            to="/admin/dashboard"
-            className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
-          >
-            <LayoutDashboard size={18} /> <span className="hidden sm:inline">Analytics</span>
-          </NavLink>
+          
+          {/* RBAC: Hide Analytics from Staff */}
+          {role === 'admin' && (
+            <NavLink 
+              to="/admin/dashboard"
+              className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+            >
+              <LayoutDashboard size={18} /> <span className="hidden sm:inline">Analytics</span>
+            </NavLink>
+          )}
+
           <NavLink 
             to="/admin/appointments"
             className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
           >
             <ListTodo size={18} /> <span className="hidden sm:inline">Appointments</span>
           </NavLink>
-          <NavLink 
-            to="/admin/settings"
-            className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
-          >
-            <Settings size={18} /> <span className="hidden sm:inline">Work Hours</span>
-          </NavLink>
-          <NavLink 
-            to="/admin/staff"
-            className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
-          >
-            <Users size={18} /> <span className="hidden sm:inline">Staff</span>
-          </NavLink>
-          <NavLink 
-            to="/admin/services"
-            className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
-          >
-            <Scissors size={18} /> <span className="hidden sm:inline">Services</span>
-          </NavLink>
+
+          {/* RBAC: Hide Management tabs from Staff */}
+          {role === 'admin' && (
+            <>
+              <NavLink 
+                to="/admin/settings"
+                className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+              >
+                <Settings size={18} /> <span className="hidden sm:inline">Work Hours</span>
+              </NavLink>
+              <NavLink 
+                to="/admin/staff"
+                className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+              >
+                <Users size={18} /> <span className="hidden sm:inline">Staff</span>
+              </NavLink>
+              <NavLink 
+                to="/admin/services"
+                className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+              >
+                <Scissors size={18} /> <span className="hidden sm:inline">Services</span>
+              </NavLink>
+            </>
+          )}
         </div>
 
-        {/* Filters (Only visible on the Appointments page) */}
+        {/* Filters */}
         <div className="flex flex-col md:flex-row items-center gap-3 w-full xl:w-auto p-2 xl:p-0">
           {isAppointmentsPage && (
             <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
@@ -221,10 +237,12 @@ export default function AdminPanel({ apiBase }) {
         </div>
       </div>
 
-      {/* Nested React Routes Configuration */}
       <Routes>
-        <Route path="dashboard" element={<AnalyticsDashboard bookings={filteredBookings} />} />        
-        {/* Pass the token down to AppointmentsList so it can perform authenticated PUT/DELETE requests */}
+        {/* RBAC: Protect Routes from direct URL access */}
+        {role === 'admin' && (
+          <Route path="dashboard" element={<AnalyticsDashboard bookings={filteredBookings} />} />
+        )}
+        
         <Route 
           path="appointments" 
           element={
@@ -234,14 +252,21 @@ export default function AdminPanel({ apiBase }) {
               onRefresh={loadBookings} 
               filters={{ searchTerm, statusFilter, dateFilter }} 
               token={token} 
+              role={role}
             />
           } 
         />
-        <Route path="settings" element={<SettingsPanel apiBase={apiBase} token={token} />} />
-        <Route path="staff" element={<StaffManagement apiBase={apiBase} token={token} />} />
-        <Route path="services" element={<ServicesManagement apiBase={apiBase} token={token} />} />
-        {/* Fallback route: Redirect /admin to /admin/dashboard */}
-        <Route path="*" element={<Navigate to="dashboard" replace />} />
+        
+        {role === 'admin' && (
+          <>
+            <Route path="settings" element={<SettingsPanel apiBase={apiBase} token={token} />} />
+            <Route path="staff" element={<StaffManagement apiBase={apiBase} token={token} />} />
+            <Route path="services" element={<ServicesManagement apiBase={apiBase} token={token} />} />
+          </>
+        )}
+
+        {/* Dynamic Fallback: Staff go to appointments, Admins go to dashboard */}
+        <Route path="*" element={<Navigate to={role === 'admin' ? "dashboard" : "appointments"} replace />} />
       </Routes>
 
     </div>

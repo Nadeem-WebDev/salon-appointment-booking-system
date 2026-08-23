@@ -27,7 +27,7 @@ export default function AdminLogin({ apiBase, onLoginSuccess, onBack }) {
       }
 
       // Success! Pass the token back to AdminPanel
-      onLoginSuccess(data.token);
+      onLoginSuccess(data.token, data.role);
     } catch (err) {
       setError(err.message);
     } finally {

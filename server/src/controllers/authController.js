@@ -22,12 +22,12 @@ export const login = async (req, res) => {
 
     // 3. Generate a JWT that expires in 1 day
     const token = jwt.sign(
-      { id: admin.id, username: admin.username }, 
+      { id: admin.id, username: admin.username, role: admin.role }, 
       process.env.JWT_SECRET, 
       { expiresIn: '1d' }
     );
 
-    res.json({ token, username: admin.username });
+    res.json({ token, username: admin.username, role: admin.role });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Server error during login' });
