@@ -1,14 +1,35 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-
 import BookingForm from './components/BookingForm.jsx';
 import QueueView from './components/QueueView.jsx';
 import AdminPanel from './components/admin/AdminPanel.jsx';
-
 import logo from './assets/logo.svg';
-import { CalendarClock, Users, ShieldCheck } from 'lucide-react';
+// NEW: Imported 'Home' icon for the 404 page
+import { CalendarClock, Users, ShieldCheck, Home } from 'lucide-react'; 
 
-// Extracted Customer View Component
+// --- NEW: 404 Error Page Component ---
+function NotFound() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center text-center px-4 relative z-10 overflow-hidden">
+       {/* Ambient Glow */}
+       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-[#96E072]/40 blur-[100px] rounded-full pointer-events-none -z-10"></div>
+       
+       <h1 className="text-[120px] leading-none font-black text-[#134611] mb-2 tracking-tighter">404</h1>
+       <h2 className="text-2xl md:text-3xl font-black text-[#3E8914] mb-4">Looks like you're lost!</h2>
+       <p className="text-[#3DA35D] font-bold mb-8 max-w-md">
+         The page you are looking for doesn't exist, has been moved, or is currently unavailable.
+       </p>
+       
+       <Link 
+         to="/" 
+         className="flex items-center gap-2 bg-[#134611] text-[#E8FCCF] py-3.5 px-6 rounded-xl font-bold hover:bg-[#3E8914] transition-all hover:shadow-[0_8px_20px_rgba(19,70,17,0.2)] hover:-translate-y-0.5 no-underline"
+       >
+         <Home size={20} /> Take Me Home
+       </Link>
+    </div>
+  );
+}
+
 function CustomerView({ apiBase }) {
   const [queueRefreshKey, setQueueRefreshKey] = useState(0);
 
@@ -24,12 +45,10 @@ function CustomerView({ apiBase }) {
               SalonBooker
             </h1>
           </div>
-
-          {/* Changed button to a Link component */}
           <Link 
             to="/admin"
-            className="flex items-center gap-2 bg-[#3E8914] text-[#E8FCCF] border border-[#96E072]/50 py-2 px-4 md:py-2.5 md:px-5 rounded-lg md:rounded-xl font-semibold transition-all duration-300 text-sm hover:bg-[#3DA35D] hover:text-[#134611] hover:shadow-lg hover:-translate-y-0.5 no-underline" 
-          >
+            className="flex items-center gap-2 bg-[#3E8914] text-[#E8FCCF] border border-[#96E072]/50 py-2 px-4 md:py-2.5 md:px-5 rounded-lg md:rounded-xl font-semibold transition-all duration-300 text-sm hover:bg-[#3DA35D] hover:text-[#134611] hover:shadow-lg hover:-translate-y-0.5 no-underline"
+           >
             <ShieldCheck size={18} />
             <span className="hidden sm:inline">Admin Access</span>
           </Link>
@@ -38,7 +57,7 @@ function CustomerView({ apiBase }) {
 
       <main className="py-12 px-4 md:px-8 max-w-350 mx-auto relative">
         <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[60%] h-100 bg-[#96E072]/40 blur-[120px] rounded-full pointer-events-none -z-10"></div>
-
+        
         <section className="text-center mb-12 max-w-2xl mx-auto">
           <h2 className="text-3xl md:text-5xl font-black mb-4 text-[#134611] tracking-tight">
             Your perfect style,<br/>
@@ -82,6 +101,9 @@ export default function App() {
         <Routes>
           <Route path="/" element={<CustomerView apiBase={API_BASE} />} />
           <Route path="/admin/*" element={<AdminPanel apiBase={API_BASE} />} />
+          
+          {/* NEW: The Catch-All Route. If nothing above matches, show the 404 page! */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
     </BrowserRouter>
