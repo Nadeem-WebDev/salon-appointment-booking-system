@@ -275,7 +275,8 @@ const razorpay = new Razorpay({
 // Create a Razorpay Order (WITH DOUBLE-BOOKING DEFENSE 1)
 export const createPaymentOrder = async (req, res) => {
   try {
-    const { service_id, staff_id, appointment_time } = req.body;
+    // NEW: Accept payment_type from the frontend ('deposit' or 'full')
+    const { service_id, staff_id, appointment_time, payment_type } = req.body;
 
     // DEFENSE 1: Check if slot is already booked BEFORE generating a payment order
     const checkConflict = await pool.query(
@@ -292,11 +293,13 @@ export const createPaymentOrder = async (req, res) => {
     if (serviceRes.rows.length === 0) return res.status(404).json({ error: 'Service not found' });
 
     const fullPrice = Number(serviceRes.rows[0].price);
-    const depositAmount = Math.round(fullPrice * 0.30); // 30% deposit
+    
+    // NEW: Determine exactly how much to charge them
+    const amountToPay = payment_type === 'full' ? fullPrice : Math.round(fullPrice * 0.30);
 
     // Create Razorpay Order
     const options = {
-      amount: depositAmount * 100, 
+      amount: amountToPay * 100, 
       currency: 'INR',
       receipt: `receipt_${Date.now()}`,
     };
@@ -305,7 +308,7 @@ export const createPaymentOrder = async (req, res) => {
     
     res.json({
       order_id: order.id,
-      deposit_amount: depositAmount,
+      payable_amount: amountToPay, // Renamed to reflect it could be full or partial
       full_price: fullPrice,
       currency: order.currency,
       key_id: process.env.RAZORPAY_KEY_ID
@@ -336,17 +339,17 @@ export const verifyPaymentAndBook = async (req, res) => {
     return res.status(400).json({ error: 'Invalid payment signature. Transaction failed.' });
   }
 
-  const { customer_name, phone, email, service_id, staff_id, appointment_time, deposit_amount } = bookingData;
+  // Extract amount_paid instead of deposit_amount
+  const { customer_name, phone, email, service_id, staff_id, appointment_time, amount_paid } = bookingData;
 
   try {
-    // Final check right before insert (Protects against 2 people paying at the exact same millisecond)
+    // Final double-booking check
     const checkConflict = await pool.query(
       `SELECT id FROM bookings WHERE appointment_time = $1 AND staff_id = $2 AND status IN ('queued', 'in-progress')`,
       [appointment_time, staff_id]
     );
     
     if (checkConflict.rows.length > 0) {
-      // In a production app, you would hit Razorpay's Refund API here.
       return res.status(409).json({ error: 'Slot was booked during payment processing. Please contact support for a refund.' });
     }
 
@@ -356,10 +359,10 @@ export const verifyPaymentAndBook = async (req, res) => {
        (customer_name, phone, email, service_id, staff_id, appointment_time, status, payment_status, razorpay_order_id, razorpay_payment_id, amount_paid) 
        VALUES ($1, $2, $3, $4, $5, $6, 'queued', 'paid', $7, $8, $9) 
        RETURNING *`,
-      [customer_name, phone, email, service_id, staff_id, appointment_time, razorpay_order_id, razorpay_payment_id, deposit_amount]
+      [customer_name, phone, email, service_id, staff_id, appointment_time, razorpay_order_id, razorpay_payment_id, amount_paid]
     );
 
-    // Fetch Service & Staff Names for the Email
+    // Fetch details for Email
     const detailsRes = await pool.query(
       `SELECT s.name as service_name, s.price as full_price, st.name as staff_name 
        FROM services s, staff st 
@@ -368,7 +371,11 @@ export const verifyPaymentAndBook = async (req, res) => {
     );
     
     const { service_name, full_price, staff_name } = detailsRes.rows[0];
-    const remainingAmount = Number(full_price) - Number(deposit_amount);
+    
+    // NEW: Calculate remaining balance and dynamic label
+    const remainingAmount = Number(full_price) - Number(amount_paid);
+    const paymentLabel = remainingAmount === 0 ? "100% Full Payment:" : "30% Deposit Paid:";
+
     const formattedDate = new Date(appointment_time).toLocaleString('en-IN', {
       dateStyle: 'full',
       timeStyle: 'short',
@@ -405,7 +412,7 @@ export const verifyPaymentAndBook = async (req, res) => {
               <h3 style="border-bottom: 1px solid #ddd; padding-bottom: 8px; color: #134611;">Payment Summary</h3>
               <table style="width: 100%; text-align: left; font-size: 14px;">
                 <tr><td style="padding: 5px 0;">Total Service Price:</td><td style="text-align: right;"><strong>₹${full_price}</strong></td></tr>
-                <tr><td style="padding: 5px 0;">30% Deposit Paid:</td><td style="text-align: right; color: #3E8914;"><strong>- ₹${deposit_amount}</strong></td></tr>
+                <tr><td style="padding: 5px 0;">${paymentLabel}</td><td style="text-align: right; color: #3E8914;"><strong>- ₹${amount_paid}</strong></td></tr>
                 <tr style="border-top: 1px solid #eee;"><td style="padding: 10px 0; font-size: 16px;"><strong>Remaining Due at Salon:</strong></td><td style="text-align: right; font-size: 16px; color: #134611;"><strong>₹${remainingAmount}</strong></td></tr>
               </table>
             </div>

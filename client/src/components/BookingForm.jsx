@@ -6,6 +6,7 @@ export default function BookingForm({ apiBase, onBooked }) {
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [paymentType, setPaymentType] = useState('deposit'); // 'deposit' or 'full'
   
   // Dynamic Config Data
   const [servicesList, setServicesList] = useState([]);
@@ -27,7 +28,6 @@ export default function BookingForm({ apiBase, onBooked }) {
 
   const todayString = new Date().toLocaleDateString('en-CA'); 
 
-  // Fetch all dynamic configuration data on mount
   useEffect(() => {
     const fetchSalonData = async () => {
       try {
@@ -46,7 +46,6 @@ export default function BookingForm({ apiBase, onBooked }) {
         setBusinessHours(await hoursRes.json());
         setBlockedDates(await blockedRes.json());
         
-        // Auto-select the first option
         if (servicesData.length > 0) setServiceId(servicesData[0].id);
         if (staffData.length > 0) setStaffId(staffData[0].id);
       } catch (err) {
@@ -56,13 +55,11 @@ export default function BookingForm({ apiBase, onBooked }) {
     fetchSalonData();
   }, [apiBase]);
 
-  // Fetch already booked slots when a date and stylist are picked
   useEffect(() => {
     if (!appointmentDate || !staffId) {
       setBookedSlots([]);
       return;
     }
-    
     const fetchBookedSlots = async () => {
       try {
         const res = await fetch(`${apiBase}/bookings/booked-times?date=${appointmentDate}&staff_id=${staffId}`);
@@ -77,27 +74,21 @@ export default function BookingForm({ apiBase, onBooked }) {
     fetchBookedSlots();
   }, [appointmentDate, staffId, apiBase]);
 
-  // --- NEW: Filter out past holidays to only show upcoming ones in the banner ---
   const upcomingClosures = useMemo(() => {
     return blockedDates.filter(bd => bd.blocked_date >= todayString);
   }, [blockedDates, todayString]);
 
-  // Format date nicely for the banner (e.g., "Aug 15, 2026")
   const formatHolidayDate = (dateString) => {
     const [year, month, day] = dateString.split('-');
     const d = new Date(year, month - 1, day);
     return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
-  // Handle Date Selection & Holiday Validation
   const handleDateChange = (e) => {
     const selectedDate = e.target.value;
     setMessage('');
     
-    // 1. Check if it's a blocked date (Holiday/Renovation)
-    // --- NEW: Find the specific blocked date to extract the reason ---
     const blockedDateEntry = blockedDates.find(bd => bd.blocked_date === selectedDate);
-    
     if (blockedDateEntry) {
       setMessageType('error');
       setMessage(`Sorry, we are closed on this date. Reason: ${blockedDateEntry.reason}`);
@@ -106,9 +97,8 @@ export default function BookingForm({ apiBase, onBooked }) {
       return;
     }
 
-    // 2. Check if the salon is closed on this specific day of the week
     const dateObj = new Date(selectedDate);
-    const dayOfWeek = dateObj.getUTCDay(); // 0 = Sunday, 1 = Monday
+    const dayOfWeek = dateObj.getUTCDay();
     const daySettings = businessHours.find(h => h.day_of_week === dayOfWeek);
 
     if (daySettings && daySettings.is_closed) {
@@ -123,7 +113,6 @@ export default function BookingForm({ apiBase, onBooked }) {
     setAppointmentSlot(''); 
   };
 
-  // Generate available 20-minute intervals based on Business Hours
   const availableSlots = useMemo(() => {
     if (!appointmentDate || businessHours.length === 0) return [];
 
@@ -137,7 +126,6 @@ export default function BookingForm({ apiBase, onBooked }) {
     const isToday = appointmentDate === todayString;
     const now = new Date();
     
-    // Convert open and close times to minutes for generation
     const [openH, openM] = daySettings.open_time.split(':').map(Number);
     const [closeH, closeM] = daySettings.close_time.split(':').map(Number);
     
@@ -152,15 +140,12 @@ export default function BookingForm({ apiBase, onBooked }) {
       const min = m.toString().padStart(2, '0');
       const timeString = `${hour}:${min}`;
 
-      // Filter out past times for today
       if (isToday) {
         const nowMins = now.getHours() * 60 + now.getMinutes();
         if (currentMins <= nowMins) continue;
       }
       
-      // Remove slots already taken in the database
       if (bookedSlots.includes(timeString)) continue;
-
       slots.push(timeString);
     }
     return slots;
@@ -174,7 +159,12 @@ export default function BookingForm({ apiBase, onBooked }) {
     return `${displayHour}:${m} ${ampm}`;
   };
 
-  // Handle Razorpay Checkout & Booking (Double Booking Protected)
+  // --- NEW: Calculate exact amounts for UI display ---
+  const selectedServiceObj = servicesList.find(s => String(s.id) === String(serviceId));
+  const uiFullPrice = selectedServiceObj ? Number(selectedServiceObj.price) : 0;
+  const uiDepositPrice = Math.round(uiFullPrice * 0.30);
+
+  // Handle Razorpay Checkout
   async function handlePaymentCheckout(e) {
     e.preventDefault(); 
     setLoading(true); 
@@ -188,19 +178,19 @@ export default function BookingForm({ apiBase, onBooked }) {
     }
 
     try {
-      // 1. Generate the final time string FIRST
       const [year, month, day] = appointmentDate.split('-');
       const [hour, minute] = appointmentSlot.split(':');
       const finalAppointmentTime = new Date(year, month - 1, day, hour, minute).toISOString();
 
-      // 2. Ask backend to create a Razorpay Order (Sends staff and time for validation)
+      // Pass the payment_type flag to the backend
       const orderRes = await fetch(`${apiBase}/bookings/create-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           service_id: serviceId,
           staff_id: staffId,
-          appointment_time: finalAppointmentTime
+          appointment_time: finalAppointmentTime,
+          payment_type: paymentType
         })
       });
       const orderData = await orderRes.json();
@@ -212,17 +202,15 @@ export default function BookingForm({ apiBase, onBooked }) {
       
       if (!orderRes.ok) throw new Error(orderData.error);
 
-      // 3. Configure Razorpay Popup Options
       const options = {
         key: orderData.key_id,
-        amount: orderData.deposit_amount * 100, // Amount in paise
+        amount: orderData.payable_amount * 100,
         currency: orderData.currency,
         name: "SalonBooker",
-        description: "30% Appointment Deposit",
+        description: paymentType === 'full' ? "100% Appointment Payment" : "30% Appointment Deposit",
         order_id: orderData.order_id,
         handler: async function (response) {
           
-          // 4. Verify Payment on Backend & Save Booking
           const verifyRes = await fetch(`${apiBase}/bookings/verify-payment`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -237,7 +225,7 @@ export default function BookingForm({ apiBase, onBooked }) {
                 service_id: serviceId,
                 staff_id: staffId,
                 appointment_time: finalAppointmentTime,
-                deposit_amount: orderData.deposit_amount
+                amount_paid: orderData.payable_amount // Pass the dynamically charged amount back
               }
             })
           });
@@ -245,21 +233,15 @@ export default function BookingForm({ apiBase, onBooked }) {
           if (verifyRes.ok) {
             if (typeof onBooked === 'function') onBooked();
             setMessageType('success');
-            setMessage(`✓ Deposit of ₹${orderData.deposit_amount} received! Appointment confirmed.`);
+            setMessage(`✓ Payment of ₹${orderData.payable_amount} received! Appointment confirmed.`);
             setCustomerName(''); setPhone(''); setEmail(''); setAppointmentDate(''); setAppointmentSlot('');
           } else {
             setMessageType('error');
             setMessage('Payment verification failed. Please contact support.');
           }
         },
-        prefill: {
-          name: customerName,
-          email: email,
-          contact: phone
-        },
-        theme: {
-          color: "#134611"
-        }
+        prefill: { name: customerName, email: email, contact: phone },
+        theme: { color: "#134611" }
       };
 
       const paymentObject = new window.Razorpay(options);
@@ -289,7 +271,6 @@ export default function BookingForm({ apiBase, onBooked }) {
   return (
     <div className="grid gap-4 md:gap-5 relative animate-slideIn">
       
-      {/* --- NEW: Upcoming Closures / Holiday Banner --- */}
       {upcomingClosures.length > 0 && (
         <div className="bg-amber-100/60 backdrop-blur-sm border border-amber-300/60 rounded-xl p-4 shadow-sm mb-2">
           <div className="flex items-center gap-2 text-amber-800 font-black mb-2 text-sm">
@@ -322,7 +303,6 @@ export default function BookingForm({ apiBase, onBooked }) {
           <input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Required for payment verification" required className={inputClass} />
         </div>
 
-        {/* Dynamic Services & Staff Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
           <div className="flex flex-col">
             <label htmlFor="service" className="text-[14px] font-bold text-[#134611] mb-2">Service *</label>
@@ -344,39 +324,20 @@ export default function BookingForm({ apiBase, onBooked }) {
           </div>
         </div>
 
-        {/* Dynamic Date & Time Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
           <div className="flex flex-col">
             <label htmlFor="date" className="text-[14px] font-bold text-[#134611] mb-2">Date *</label>
-            <input 
-              id="date" 
-              type="date" 
-              min={todayString} 
-              value={appointmentDate} 
-              onChange={handleDateChange} 
-              required 
-              className={inputClass} 
-            />
+            <input id="date" type="date" min={todayString} value={appointmentDate} onChange={handleDateChange} required className={inputClass} />
           </div>
           <div className="flex flex-col">
             <label htmlFor="time" className="text-[14px] font-bold text-[#134611] mb-2">Time Slot *</label>
             <select 
-              id="time" 
-              value={appointmentSlot} 
-              onChange={e => setAppointmentSlot(e.target.value)} 
-              required 
-              disabled={!appointmentDate}
-              className={`${inputClass} ${!appointmentDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+              id="time" value={appointmentSlot} onChange={e => setAppointmentSlot(e.target.value)} required 
+              disabled={!appointmentDate} className={`${inputClass} ${!appointmentDate ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <option value="" disabled>
-                {!appointmentDate ? 'Select a date first' : 'Choose a time'}
-              </option>
+              <option value="" disabled>{!appointmentDate ? 'Select a date first' : 'Choose a time'}</option>
               {availableSlots.length > 0 ? (
-                availableSlots.map(slot => (
-                  <option key={slot} value={slot}>
-                    {formatTimeDisplay(slot)}
-                  </option>
-                ))
+                availableSlots.map(slot => (<option key={slot} value={slot}>{formatTimeDisplay(slot)}</option>))
               ) : (
                 appointmentDate && <option value="" disabled>No slots available</option>
               )}
@@ -384,12 +345,48 @@ export default function BookingForm({ apiBase, onBooked }) {
           </div>
         </div>
 
+        {/* --- NEW: Payment Options Radio Buttons --- */}
+        <div className="flex flex-col mt-2">
+          <label className="text-[14px] font-bold text-[#134611] mb-3">Payment Option *</label>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <label className={`flex-1 p-3.5 rounded-xl border-2 flex items-start gap-3 cursor-pointer transition-all ${paymentType === 'deposit' ? 'border-[#3E8914] bg-[#96E072]/20' : 'border-[#3DA35D]/40 bg-white/50 hover:border-[#3E8914]/50'}`}>
+              <input 
+                type="radio" 
+                name="paymentType" 
+                value="deposit" 
+                checked={paymentType === 'deposit'} 
+                onChange={() => setPaymentType('deposit')} 
+                className="w-4 h-4 mt-0.5 accent-[#3E8914]" 
+              />
+              <div className="flex flex-col">
+                <span className="text-[#134611] font-black text-[15px]">Pay 30% Deposit</span>
+                <span className="text-[#3DA35D] font-bold text-[13px] mt-1">₹{uiDepositPrice} now, rest at salon</span>
+              </div>
+            </label>
+            
+            <label className={`flex-1 p-3.5 rounded-xl border-2 flex items-start gap-3 cursor-pointer transition-all ${paymentType === 'full' ? 'border-[#3E8914] bg-[#96E072]/20' : 'border-[#3DA35D]/40 bg-white/50 hover:border-[#3E8914]/50'}`}>
+              <input 
+                type="radio" 
+                name="paymentType" 
+                value="full" 
+                checked={paymentType === 'full'} 
+                onChange={() => setPaymentType('full')} 
+                className="w-4 h-4 mt-0.5 accent-[#3E8914]" 
+              />
+              <div className="flex flex-col">
+                <span className="text-[#134611] font-black text-[15px]">Pay 100% Upfront</span>
+                <span className="text-[#3DA35D] font-bold text-[13px] mt-1">₹{uiFullPrice} now, nothing due later</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
         <button 
           type="submit" 
           disabled={loading || !appointmentDate || !appointmentSlot || !serviceId || !staffId} 
-          className="mt-2 py-3.5 px-6 bg-[#3E8914] text-[#E8FCCF] border-none rounded-xl text-[16px] font-black cursor-pointer transition-all duration-300 hover:not(:disabled):bg-[#134611] hover:not(:disabled):shadow-[0_8px_20px_rgba(19,70,17,0.3)] hover:not(:disabled):-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="mt-3 py-4 px-6 bg-[#3E8914] text-[#E8FCCF] border-none rounded-xl text-[16px] font-black cursor-pointer transition-all duration-300 hover:not(:disabled):bg-[#134611] hover:not(:disabled):shadow-[0_8px_20px_rgba(19,70,17,0.3)] hover:not(:disabled):-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          {loading ? 'Connecting to Secure Checkout...' : 'Pay 30% Deposit & Book →'}
+          {loading ? 'Connecting to Secure Checkout...' : `Pay ₹${paymentType === 'full' ? uiFullPrice : uiDepositPrice} & Book →`}
         </button>
       </form>
 
