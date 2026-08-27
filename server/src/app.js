@@ -16,6 +16,11 @@ app.use(express.json());
 app.use('/api/bookings', bookingsRoutes);
 app.use('/api/auth', authRoutes);
 
+// A lightweight endpoint just to keep the server awake
+app.get('/api/keep-alive', (req, res) => {
+  res.status(200).json({ status: 'awake', time: new Date() });
+});
+
 if(process.env.NODE_ENV === "production") {
     app.use(express.static(path.join(__dirname,"../client/dist")))
     app.get(/(.*)/  , (req, res)=>{
