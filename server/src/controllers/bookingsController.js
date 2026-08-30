@@ -350,7 +350,25 @@ export const verifyPaymentAndBook = async (req, res) => {
     );
     
     if (checkConflict.rows.length > 0) {
-      return res.status(409).json({ error: 'Slot was booked during payment processing. Please contact support for a refund.' });
+      // --- AUTOMATED REFUND FOR RACE CONDITIONS ---
+      try {
+        console.log(`Race condition detected! Refunding payment: ${razorpay_payment_id}`);
+        
+        await razorpay.payments.refund(razorpay_payment_id, {
+          amount: amount_paid * 100, // Amount in paise
+          speed: "optimum" // Processes the refund as quickly as possible
+        });
+
+        return res.status(409).json({ 
+          error: 'Someone else just booked this exact slot a second ago! Your payment has been automatically refunded to your original payment method.' 
+        });
+
+      } catch (refundErr) {
+        console.error("Razorpay Automated Refund Failed:", refundErr);
+        return res.status(409).json({ 
+          error: 'Slot taken during checkout. Please contact the salon for a manual refund.' 
+        });
+      }
     }
 
     // Save Booking to Database
