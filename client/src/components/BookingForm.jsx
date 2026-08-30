@@ -236,8 +236,9 @@ export default function BookingForm({ apiBase, onBooked }) {
             setMessage(`✓ Payment of ₹${orderData.payable_amount} received! Appointment confirmed.`);
             setCustomerName(''); setPhone(''); setEmail(''); setAppointmentDate(''); setAppointmentSlot('');
           } else {
+            const errorData = await verifyRes.json();
             setMessageType('error');
-            setMessage('Payment verification failed. Please contact support.');
+            setMessage(errorData.error || 'Payment verification failed. Please contact support.');
           }
         },
         prefill: { name: customerName, email: email, contact: phone },
