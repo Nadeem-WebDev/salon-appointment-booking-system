@@ -1,5 +1,6 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
+import PDFDocument from 'pdfkit';
 
 import { pool } from '../config/db.js';
 
@@ -186,15 +187,57 @@ export async function getQueue(req, res) {
 export async function updateBooking(req, res) {
   try {
     const { id } = req.params;
-    // Admin can now update service_id and status
     const { customer_name, phone, service_id, appointment_time, status } = req.body;
+
+    // 1. Fetch the OLD status and full service/payment details before updating
+    const currentBookingRes = await pool.query(
+      `SELECT b.status, b.amount_paid, s.name as service_name, s.price as service_price, st.name as staff_name 
+       FROM bookings b 
+       JOIN services s ON b.service_id = s.id 
+       JOIN staff st ON b.staff_id = st.id 
+       WHERE b.id = $1`, 
+      [id]
+    );
+
+    if (currentBookingRes.rows.length === 0) return res.status(404).json({ error: 'Booking not found' });
+    const currentBooking = currentBookingRes.rows[0];
+    const oldStatus = currentBooking.status;
+
+    // 2. Perform the update in database
     const result = await pool.query(
       `UPDATE bookings SET customer_name = $1, phone = $2, service_id = $3, appointment_time = $4, status = $5 WHERE id = $6 RETURNING *`,
       [customer_name, phone || null, service_id, appointment_time, status, id]
     );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Booking not found' });
+
+    // 3. Trigger Email Invoice ONLY if it just transitioned to 'completed'
+    if (status === 'completed' && oldStatus !== 'completed') {
+      // Use the updated service if it was changed during the edit, otherwise use current
+      const serviceRes = await pool.query(`SELECT name, price FROM services WHERE id = $1`, [service_id]);
+      const serviceData = serviceRes.rows[0];
+
+      const emailToSend = result.rows[0].email;
+      const clientName = result.rows[0].customer_name;
+      const totalAmount = Number(serviceData.price);
+      const paidAmount = Number(currentBooking.amount_paid || 0);
+      const dueAmount = totalAmount - paidAmount;
+
+      if (emailToSend && emailToSend !== 'walkin@salon.local') {
+        generateAndSendInvoiceEmail({
+          email: emailToSend,
+          customerName: clientName,
+          serviceName: serviceData.name,
+          staffName: currentBooking.staff_name,
+          totalAmount,
+          paidAmount,
+          dueAmount,
+          bookingId: id
+        });
+      }
+    }
+
     res.json(result.rows[0]);
   } catch (err) {
+    console.error('Update Booking Error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 }
@@ -555,3 +598,169 @@ export const deleteService = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
+
+
+// --- NEW: Manual Admin/Walk-in Booking ---
+export async function createManualBooking(req, res) {
+  try {
+    const { customer_name, phone, email, service_id, staff_id, appointment_time } = req.body;
+
+    // Double-booking defense
+    const checkConflict = await pool.query(
+      `SELECT id FROM bookings WHERE appointment_time = $1 AND staff_id = $2 AND status IN ('queued', 'in-progress')`,
+      [appointment_time, staff_id]
+    );
+    
+    if (checkConflict.rows.length > 0) {
+      return res.status(409).json({ error: 'This stylist is already booked at that exact time.' });
+    }
+
+    // Insert with payment_status as 'manual-walkin' and bypass payment logic
+    const newBooking = await pool.query(
+      `INSERT INTO bookings 
+       (customer_name, phone, email, service_id, staff_id, appointment_time, status, payment_status, amount_paid) 
+       VALUES ($1, $2, $3, $4, $5, $6, 'queued', 'manual-walkin', 0) 
+       RETURNING *`,
+      [customer_name, phone || null, email || 'walkin@salon.local', service_id, staff_id, appointment_time]
+    );
+
+    res.status(201).json(newBooking.rows[0]);
+  } catch (err) {
+    console.error('Manual Booking Error:', err);
+    res.status(500).json({ error: 'Server error while creating manual booking.' });
+  }
+}
+
+
+// --- Modernized PDF Generation & Brevo Email Dispatcher ---
+async function generateAndSendInvoiceEmail(data) {
+  try {
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const buffers = [];
+    
+    doc.on('data', buffers.push.bind(buffers));
+    doc.on('end', async () => {
+      const pdfBuffer = Buffer.concat(buffers);
+      const base64Pdf = pdfBuffer.toString('base64');
+
+      await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'api-key': process.env.BREVO_API_KEY
+        },
+        body: JSON.stringify({
+          sender: { name: "SalonBooker", email: process.env.EMAIL_USER },
+          to: [{ email: data.email, name: data.customerName }],
+          subject: `Thank you for visiting! - Your Invoice #${data.bookingId}`,
+          htmlContent: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px;">
+              <div style="background-color: #134611; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+                <h1 style="color: #E8FCCF; margin: 0; font-size: 24px;">Thank You for Visiting!</h1>
+              </div>
+              <div style="padding: 20px; color: #134611;">
+                <p style="font-size: 16px;">Hi <strong>${data.customerName}</strong>,</p>
+                <p>We hope you loved your experience with us today!</p>
+                <p>We have attached your official final receipt PDF to this email for your records.</p>
+                <p style="margin-top: 30px; font-weight: bold; text-align: center; color: #3E8914;">We look forward to seeing you again soon!</p>
+              </div>
+            </div>
+          `,
+          attachment: [{ content: base64Pdf, name: `Invoice_INV-${data.bookingId}.pdf` }]
+        })
+      });
+      console.log(`Invoice email sent successfully to ${data.email}`);
+    });
+
+    // --- NEW DESIGN: Colors & Typography ---
+    const darkGreen = '#134611';
+    const accentGreen = '#3E8914';
+    const grayText = '#555555';
+    
+    // Top Header Section
+    doc.font('Helvetica-Bold').fontSize(32).fillColor(darkGreen).text('INVOICE', 50, 50);
+    doc.fontSize(14).fillColor(accentGreen).text(`INV-${data.bookingId}`, 400, 65, { align: 'right' });
+    doc.moveDown(3);
+
+    // FROM & BILL TO Section (Side-by-Side)
+    const infoTop = 130;
+    
+    // Left Side: FROM
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(accentGreen).text('FROM', 50, infoTop);
+    doc.fontSize(12).fillColor(darkGreen).text('SalonBooker Studio', 50, infoTop + 15);
+    doc.font('Helvetica').fontSize(10).fillColor(grayText);
+    doc.text('Bhagat Singh Nagar', 50, infoTop + 32);
+    doc.text('Mumbai, Maharashtra, India', 50, infoTop + 46);
+
+    // Right Side: BILL TO
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(accentGreen).text('BILL TO', 300, infoTop);
+    doc.fontSize(12).fillColor(darkGreen).text(data.customerName, 300, infoTop + 15);
+    doc.font('Helvetica').fontSize(10).fillColor(grayText);
+    doc.text(`Date: ${new Date().toLocaleDateString('en-IN')}`, 300, infoTop + 32);
+
+    // --- TABLE SECTION ---
+    const tableTop = 240;
+    
+    // Top border of table
+    doc.moveTo(50, tableTop).lineTo(545, tableTop).lineWidth(1.5).strokeColor(accentGreen).stroke();
+
+    // Table Headers
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(accentGreen);
+    doc.text('Description', 50, tableTop + 8);
+    doc.text('Stylist', 250, tableTop + 8);
+    doc.text('Amount', 445, tableTop + 8, { width: 100, align: 'right' });
+
+    // Bottom border of headers
+    const rowTop = tableTop + 25;
+    doc.moveTo(50, rowTop).lineTo(545, rowTop).lineWidth(1.5).strokeColor(accentGreen).stroke();
+
+    // Table Content Row
+    const itemTop = rowTop + 10;
+    doc.font('Helvetica').fontSize(11).fillColor(darkGreen);
+    doc.text(data.serviceName, 50, itemTop);
+    doc.text(data.staffName, 250, itemTop);
+    doc.text(`Rs. ${data.totalAmount}`, 445, itemTop, { width: 100, align: 'right' });
+
+    // Subtle line below item
+    doc.moveTo(50, itemTop + 20).lineTo(545, itemTop + 20).lineWidth(0.5).strokeColor('#e0e0e0').stroke();
+
+    // --- CALCULATIONS SECTION ---
+    const calcTop = itemTop + 40;
+    doc.font('Helvetica').fontSize(10).fillColor(grayText);
+    const calcLeft = 320;
+
+    doc.text('Total Amount:', calcLeft, calcTop);
+    doc.font('Helvetica-Bold').fillColor(darkGreen).text(`Rs. ${data.totalAmount}`, 445, calcTop, { width: 100, align: 'right' });
+
+    let nextY = calcTop + 20;
+    doc.font('Helvetica').fillColor(grayText);
+    
+    // Dynamic Breakdown
+    if (data.paidAmount > 0 && data.dueAmount > 0) {
+      doc.text('Online Deposit:', calcLeft, nextY);
+      doc.text(`Rs. ${data.paidAmount}`, 445, nextY, { width: 100, align: 'right' });
+      nextY += 15;
+      doc.text('Paid at Counter:', calcLeft, nextY);
+      doc.text(`Rs. ${data.dueAmount}`, 445, nextY, { width: 100, align: 'right' });
+    } else if (data.paidAmount > 0 && data.dueAmount === 0) {
+      doc.text('Paid Online:', calcLeft, nextY);
+      doc.text(`Rs. ${data.totalAmount}`, 445, nextY, { width: 100, align: 'right' });
+    } else {
+      doc.text('Paid at Counter:', calcLeft, nextY);
+      doc.text(`Rs. ${data.totalAmount}`, 445, nextY, { width: 100, align: 'right' });
+    }
+
+    // --- FINAL SOLID BLOCK (Like the example's orange total bar) ---
+    const blockTop = nextY + 25;
+    doc.rect(50, blockTop, 495, 30).fill(accentGreen);
+    
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#ffffff');
+    doc.text('BALANCE DUE', 60, blockTop + 9);
+    doc.text('Rs. 0', 445, blockTop + 9, { width: 90, align: 'right' });
+
+    doc.end();
+  } catch (err) {
+    console.error("Failed to generate PDF:", err);
+  }
+}

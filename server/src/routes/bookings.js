@@ -1,7 +1,7 @@
 import express from 'express';
 import { verifyToken } from '../middleware/authMiddleware.js';
 import {
-  listBookings, getQueue, updateBooking, deleteBooking, requestOtp, verifyOtpAndBook, getBookedTimes, getServices, getStaff, getBusinessHours, updateBusinessHours, getBlockedDates, addBlockedDate, deleteBlockedDate, createPaymentOrder,verifyPaymentAndBook, getAdminStaff, addStaff, updateStaff, deleteStaff, getAdminServices, addService, updateService, deleteService
+  listBookings, getQueue, updateBooking, deleteBooking, requestOtp, verifyOtpAndBook, getBookedTimes, getServices, getStaff, getBusinessHours, updateBusinessHours, getBlockedDates, addBlockedDate, deleteBlockedDate, createPaymentOrder,verifyPaymentAndBook, getAdminStaff, addStaff, updateStaff, deleteStaff, getAdminServices, addService, updateService, deleteService, createManualBooking
 } from '../controllers/bookingsController.js';
 
 const router = express.Router();
@@ -18,7 +18,8 @@ router.get('/settings/blocked-dates', getBlockedDates);
 // router.post('/verify-otp', verifyOtpAndBook);
 
 // Protected Admin Routes
-router.get('/', verifyToken, listBookings); 
+router.get('/', verifyToken, listBookings);
+router.post('/', verifyToken, createManualBooking);
 router.put('/:id', verifyToken, updateBooking);
 router.delete('/:id', verifyToken, deleteBooking);
 
