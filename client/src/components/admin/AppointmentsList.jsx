@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { PlusCircle, X } from 'lucide-react';
 
 const badgeColors = {
   'queued': 'bg-[#96E072]/30 text-[#134611] border border-[#96E072]/50',
@@ -7,23 +8,41 @@ const badgeColors = {
   'cancelled': 'bg-red-500/20 text-red-800 border border-red-500/30'
 };
 
-// Notice the new 'role' prop added here
 export default function AppointmentsList({ bookings, apiBase, onRefresh, filters, token, role }) {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState({ text: '', type: '' });
+  
+  // NEW: Manual Booking Form State
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState({ customer_name: '', phone: '', email: 'walkin@salon.local', service_id: '', staff_id: '', appointment_time: '' });
+
+  // NEW: Dynamic Data for Dropdowns
+  const [services, setServices] = useState([]);
+  const [staff, setStaff] = useState([]);
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  useEffect(() => {
+    // Fetch live services and staff for the dropdowns
+    fetch(`${apiBase}/bookings/services`).then(r => r.json()).then(setServices);
+    fetch(`${apiBase}/bookings/staff`).then(r => r.json()).then(setStaff);
+  }, [apiBase]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [filters?.searchTerm, filters?.statusFilter, filters?.dateFilter]);
 
   const totalPages = Math.max(1, Math.ceil(bookings.length / itemsPerPage));
-  
   const safePage = Math.min(currentPage, totalPages);
   const startIndex = (safePage - 1) * itemsPerPage;
   const currentBookings = bookings.slice(startIndex, startIndex + itemsPerPage);
+
+  const showToast = (text, type = 'success') => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage({ text: '', type: '' }), 4000);
+  };
 
   const formatDateTime = (isoString) => {
     if (!isoString) return '';
@@ -40,50 +59,141 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
     return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
   };
 
-  async function handleSaveEdit() {
+  // --- NEW: Handle Walk-in Booking Submission ---
+  async function handleAddSubmit(e) {
+    e.preventDefault();
     try {
-      const res = await fetch(`${apiBase}/bookings/${editingId}`, {
-        method: 'PUT',
+      const res = await fetch(`${apiBase}/bookings`, {
+        method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` 
         },
-        body: JSON.stringify(editForm)
+        body: JSON.stringify({
+          ...addForm,
+          appointment_time: new Date(addForm.appointment_time).toISOString()
+        })
       });
-      if (!res.ok) throw new Error('Failed to update');
-      setMessage('Booking updated successfully');
-      setEditingId(null);
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error || 'Failed to add appointment');
+      
+      showToast('Walk-in appointment added successfully!');
+      setShowAddForm(false);
+      setAddForm({ customer_name: '', phone: '', email: 'walkin@salon.local', service_id: '', staff_id: '', appointment_time: '' });
       onRefresh();
-      setTimeout(() => setMessage(''), 3000);
     } catch (err) {
-      console.error(err);
-      setMessage('Error updating booking');
+      showToast(err.message, 'error');
     }
   }
 
+  async function handleSaveEdit() {
+    try {
+      const res = await fetch(`${apiBase}/bookings/${editingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(editForm)
+      });
+      
+      if (!res.ok) throw new Error('Failed to update');
+      
+      // --- NEW: Smart Toast Notifications ---
+      if (editForm.status === 'completed') {
+        // If they have a real email, confirm the invoice dispatch
+        if (editForm.email && editForm.email !== 'walkin@salon.local') {
+          showToast(`✓ Booking completed! Invoice sent to ${editForm.email}`);
+        } else {
+          // If it's a walk-in, just confirm the closure
+          showToast('✓ Walk-in appointment completed and closed!');
+        }
+      } else {
+        // Fallback for other status changes (queued, in-progress, etc.)
+        showToast('Booking updated successfully');
+      }
+
+      setEditingId(null);
+      onRefresh();
+    } catch (err) {
+      showToast('Error updating booking', 'error');
+    }
+  }
+
+  
   async function handleDelete(id) {
     if (window.confirm('Delete this booking?')) {
       try {
         const res = await fetch(`${apiBase}/bookings/${id}`, { 
           method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}` 
-          }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!res.ok) throw new Error('Failed to delete');
-        setMessage('Booking deleted');
+        showToast('Booking deleted');
         onRefresh();
-        setTimeout(() => setMessage(''), 3000);
       } catch (err) {
-        console.error(err);
-        setMessage('Error deleting booking');
+        showToast('Error deleting booking', 'error');
       }
     }
   }
 
+  const inputClass = "py-2 px-3 border border-[#3DA35D] rounded-lg text-sm bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072] w-full";
+
   return (
     <div className="animate-slideIn">
-      {message && <div className="bg-[#96E072]/30 text-[#134611] py-3 px-4 rounded-xl mb-4 border border-[#3E8914]/30 font-bold text-sm md:text-base backdrop-blur-md">{message}</div>}
+      {message.text && (
+        <div className={`p-4 rounded-xl font-bold text-[14px] mb-4 animate-slideIn border-l-4 ${message.type === 'error' ? 'bg-red-100 text-red-700 border-red-500' : 'bg-[#96E072]/30 text-[#134611] border-[#3E8914]'}`}>
+          {message.text}
+        </div>
+      )}
+
+      {/* --- NEW: Walk-in Booking Section --- */}
+      <div className="mb-6">
+        {!showAddForm ? (
+          <button 
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center gap-2 bg-[#134611] text-[#E8FCCF] py-2.5 px-5 rounded-xl font-bold hover:bg-[#3E8914] transition-all border-none cursor-pointer shadow-sm"
+          >
+            <PlusCircle size={18} /> Walk-in / Phone Booking
+          </button>
+        ) : (
+          <div className="bg-white/60 backdrop-blur-xl border border-[#3DA35D]/30 p-5 rounded-2xl shadow-sm">
+            <div className="flex justify-between items-center mb-4 pb-3 border-b border-[#3DA35D]/20">
+              <h3 className="font-black text-[#134611] m-0 flex items-center gap-2"><PlusCircle size={18} /> New Appointment</h3>
+              <button onClick={() => setShowAddForm(false)} className="text-[#3DA35D] hover:text-red-500 bg-transparent border-none cursor-pointer p-1"><X size={20}/></button>
+            </div>
+            <form onSubmit={handleAddSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="text-[11px] font-bold text-[#3E8914] uppercase">Customer Name *</label>
+                <input type="text" required value={addForm.customer_name} onChange={e => setAddForm({...addForm, customer_name: e.target.value})} className={inputClass} />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-[#3E8914] uppercase">Phone *</label>
+                <input type="tel" required value={addForm.phone} onChange={e => setAddForm({...addForm, phone: e.target.value})} className={inputClass} />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-[#3E8914] uppercase">Date & Time *</label>
+                <input type="datetime-local" required value={addForm.appointment_time} onChange={e => setAddForm({...addForm, appointment_time: e.target.value})} className={inputClass} />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-[#3E8914] uppercase">Service *</label>
+                <select required value={addForm.service_id} onChange={e => setAddForm({...addForm, service_id: e.target.value})} className={inputClass}>
+                  <option value="" disabled>Select Service</option>
+                  {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-[#3E8914] uppercase">Stylist *</label>
+                <select required value={addForm.staff_id} onChange={e => setAddForm({...addForm, staff_id: e.target.value})} className={inputClass}>
+                  <option value="" disabled>Select Stylist</option>
+                  {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <button type="submit" className="w-full bg-[#3E8914] text-[#E8FCCF] py-2.5 rounded-lg font-bold border-none hover:bg-[#134611] transition-colors cursor-pointer shadow-sm">Save Booking</button>
+              </div>
+            </form>
+          </div>
+        )}
+      </div>
 
       <div className="mb-3 px-1 text-sm text-[#134611]/70 font-bold">
         Showing {bookings.length} results
@@ -130,11 +240,7 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
                     value={editForm.service_id}
                     onChange={e => setEditForm({ ...editForm, service_id: e.target.value })}
                   >
-                    <option value="1">Haircut</option>
-                    <option value="2">Hair Color</option>
-                    <option value="3">Styling</option>
-                    <option value="4">Hair Treatment</option>
-                    <option value="5">Beard Trim</option>
+                    {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 ) : (
                   <p className="font-bold m-0 truncate">{booking.service}</p>
@@ -142,11 +248,30 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] text-[#3E8914] font-bold uppercase tracking-wider m-0 mb-1">Stylist</p>
-                <p className="font-bold m-0 truncate">{booking.staff_name || '-'}</p>
+                {editingId === booking.id ? (
+                  <select
+                    className="w-full py-1 px-2 border border-[#3DA35D] rounded-lg text-xs bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072]"
+                    value={editForm.staff_id}
+                    onChange={e => setEditForm({ ...editForm, staff_id: e.target.value })}
+                  >
+                    {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                ) : (
+                  <p className="font-bold m-0 truncate">{booking.staff_name || '-'}</p>
+                )}
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] text-[#3E8914] font-bold uppercase tracking-wider m-0 mb-1">Phone</p>
-                <p className="font-bold m-0 truncate">{booking.phone || '-'}</p>
+                {editingId === booking.id ? (
+                  <input
+                    type="tel"
+                    className="w-full py-1 px-2 border border-[#3DA35D] rounded-lg text-xs bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072]"
+                    value={editForm.phone || ''}
+                    onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                  />
+                ) : (
+                  <p className="font-bold m-0 truncate">{booking.phone || '-'}</p>
+                )}
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] text-[#3E8914] font-bold uppercase tracking-wider m-0 mb-1">Time</p>
@@ -172,7 +297,6 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
               ) : (
                 <>
                   <button className="flex-1 py-2.5 rounded-xl font-bold text-[#E8FCCF] bg-[#3E8914] border-none shadow-sm cursor-pointer hover:bg-[#3E8914]/90 transition-colors" onClick={() => { setEditingId(booking.id); setEditForm(booking); }}>Edit</button>
-                  {/* RBAC: Hide Delete button from staff on mobile */}
                   {role === 'admin' && (
                     <button className="flex-1 py-2.5 rounded-xl font-bold text-white bg-red-500/90 border-none shadow-sm cursor-pointer hover:bg-red-600 transition-colors" onClick={() => handleDelete(booking.id)}>Delete</button>
                   )}
@@ -208,7 +332,18 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
                 <td className="p-4 text-sm text-[#3E8914] font-black align-middle">{booking.id}</td>
                 <td className="p-4 text-sm font-black text-[#134611] align-middle">{booking.customer_name}</td>
                 <td className="p-4 text-sm font-bold text-[#3DA35D] align-middle">{booking.email}</td>
-                <td className="p-4 text-sm font-bold text-[#3DA35D] align-middle">{booking.phone || '-'}</td>
+                <td className="p-4 text-sm font-bold text-[#3DA35D] align-middle">
+                  {editingId === booking.id ? (
+                    <input
+                      type="tel"
+                      className="py-1.5 px-2 border border-[#3DA35D] rounded-lg text-sm bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072] w-28"
+                      value={editForm.phone || ''}
+                      onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                    />
+                  ) : (
+                    booking.phone || '-'
+                  )}
+                </td>
                 
                 <td className="p-4 text-sm align-middle">
                   {editingId === booking.id ? (
@@ -217,11 +352,7 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
                       value={editForm.service_id}
                       onChange={e => setEditForm({ ...editForm, service_id: e.target.value })}
                     >
-                      <option value="1">Haircut</option>
-                      <option value="2">Hair Color</option>
-                      <option value="3">Styling</option>
-                      <option value="4">Hair Treatment</option>
-                      <option value="5">Beard Trim</option>
+                      {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   ) : (
                     <span className="font-bold text-[#134611] bg-[#96E072]/20 rounded-lg inline-block px-3 py-1 border border-[#96E072]/40 whitespace-nowrap">{booking.service}</span>
@@ -229,9 +360,19 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
                 </td>
 
                 <td className="p-4 text-sm font-bold text-[#134611] align-middle">
-                  <span className="font-bold text-[#3E8914] flex items-center gap-1.5 whitespace-nowrap">
-                     {booking.staff_name || '-'}
-                  </span>
+                  {editingId === booking.id ? (
+                    <select
+                      className="py-1.5 px-2 border border-[#3DA35D] rounded-lg text-sm bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072]"
+                      value={editForm.staff_id}
+                      onChange={e => setEditForm({ ...editForm, staff_id: e.target.value })}
+                    >
+                      {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  ) : (
+                    <span className="font-bold text-[#3E8914] flex items-center gap-1.5 whitespace-nowrap">
+                       {booking.staff_name || '-'}
+                    </span>
+                  )}
                 </td>
 
                 <td className="p-4 text-sm text-[#134611] font-bold whitespace-nowrap align-middle">
@@ -277,7 +418,6 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
                   ) : (
                     <div className="flex gap-2">
                       <button className="py-2 px-4 rounded-xl font-bold text-[#E8FCCF] bg-[#3E8914] hover:bg-[#3DA35D] transition-colors border-none cursor-pointer" onClick={() => { setEditingId(booking.id); setEditForm(booking); }}>Edit</button>
-                      {/* RBAC: Hide Delete button from staff on desktop */}
                       {role === 'admin' && (
                         <button className="py-2 px-4 rounded-xl font-bold text-white bg-red-500/90 hover:bg-red-600 transition-colors border-none cursor-pointer" onClick={() => handleDelete(booking.id)}>Delete</button>
                       )}
