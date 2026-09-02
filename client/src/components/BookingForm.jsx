@@ -7,6 +7,8 @@ export default function BookingForm({ apiBase, onBooked }) {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [paymentType, setPaymentType] = useState('deposit'); // 'deposit' or 'full'
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [redeemCoins, setRedeemCoins] = useState(false);
   
   // Dynamic Config Data
   const [servicesList, setServicesList] = useState([]);
@@ -74,6 +76,28 @@ export default function BookingForm({ apiBase, onBooked }) {
     fetchBookedSlots();
   }, [appointmentDate, staffId, apiBase]);
 
+  useEffect(() => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length === 10) {
+      fetch(`${apiBase}/bookings/check-wallet/${cleanPhone}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.exists) {
+            setWalletBalance(Number(data.supercoins));
+            // Auto-fill name if they haven't typed it yet
+            setCustomerName(prev => prev || data.name);
+          } else {
+            setWalletBalance(0);
+            setRedeemCoins(false);
+          }
+        })
+        .catch(err => console.error("Wallet check failed:", err));
+    } else {
+      setWalletBalance(0);
+      setRedeemCoins(false);
+    }
+  }, [phone, apiBase]);
+
   const upcomingClosures = useMemo(() => {
     return blockedDates.filter(bd => bd.blocked_date >= todayString);
   }, [blockedDates, todayString]);
@@ -132,7 +156,7 @@ export default function BookingForm({ apiBase, onBooked }) {
     const startMins = openH * 60 + openM;
     const endMins = closeH * 60 + closeM;
 
-    for (let currentMins = startMins; currentMins <= endMins; currentMins += 20) {
+    for (let currentMins = startMins; currentMins <= endMins; currentMins += 30) {
       const h = Math.floor(currentMins / 60);
       const m = currentMins % 60;
       
@@ -159,9 +183,12 @@ export default function BookingForm({ apiBase, onBooked }) {
     return `${displayHour}:${m} ${ampm}`;
   };
 
-  // --- NEW: Calculate exact amounts for UI display ---
+  // --- Calculate exact amounts with Supercoin discounts ---
   const selectedServiceObj = servicesList.find(s => String(s.id) === String(serviceId));
-  const uiFullPrice = selectedServiceObj ? Number(selectedServiceObj.price) : 0;
+  const baseFullPrice = selectedServiceObj ? Number(selectedServiceObj.price) : 0;
+  const discountAmount = (redeemCoins && walletBalance >= 1000 && baseFullPrice >= 1000) ? 1000 : 0;
+  
+  const uiFullPrice = Math.max(0, baseFullPrice - discountAmount);
   const uiDepositPrice = Math.round(uiFullPrice * 0.30);
 
   // Handle Razorpay Checkout
@@ -190,7 +217,9 @@ export default function BookingForm({ apiBase, onBooked }) {
           service_id: serviceId,
           staff_id: staffId,
           appointment_time: finalAppointmentTime,
-          payment_type: paymentType
+          payment_type: paymentType,
+          phone: phone,
+          redeem_coins: redeemCoins
         })
       });
       const orderData = await orderRes.json();
@@ -225,7 +254,8 @@ export default function BookingForm({ apiBase, onBooked }) {
                 service_id: serviceId,
                 staff_id: staffId,
                 appointment_time: finalAppointmentTime,
-                amount_paid: orderData.payable_amount // Pass the dynamically charged amount back
+                amount_paid: orderData.payable_amount, // Pass the dynamically charged amount back
+                redeem_coins: redeemCoins
               }
             })
           });
@@ -345,6 +375,43 @@ export default function BookingForm({ apiBase, onBooked }) {
             </select>
           </div>
         </div>
+        
+        {/* --- SUPERCOIN WALLET DISPLAY --- */}
+        {walletBalance > 0 && (() => {
+          const canRedeem = walletBalance >= 1000 && baseFullPrice >= 1000;
+          return (
+            <div className="mt-1 p-4 bg-white/80 rounded-xl border border-[#3E8914]/30 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-black text-[#3E8914] uppercase tracking-wider mb-1">Your Loyalty Wallet</p>
+                <p className="text-sm font-bold text-[#134611] m-0">
+                  Balance: <span className="bg-[#E8FCCF] px-2 py-0.5 rounded text-[#3E8914]">{walletBalance} Coins</span>
+                </p>
+              </div>
+              
+              {walletBalance >= 1000 ? (
+                baseFullPrice >= 1000 ? (
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <span className="text-sm font-black text-[#134611]">Redeem 1000 Coins (₹1000 Off)</span>
+                    <input 
+                      type="checkbox" 
+                      checked={redeemCoins} 
+                      onChange={(e) => setRedeemCoins(e.target.checked)} 
+                      className="w-5 h-5 accent-[#3E8914] cursor-pointer"
+                    />
+                  </label>
+                ) : (
+                  <p className="text-xs font-bold text-amber-700 m-0 text-left sm:text-right">
+                    Service must be ₹1000+<br className="hidden sm:block"/>to redeem coins.
+                  </p>
+                )
+              ) : (
+                <p className="text-xs font-bold text-[#134611]/50 m-0 text-left sm:text-right">
+                  Need {1000 - walletBalance} more coins<br className="hidden sm:block"/>for a discount!
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
         {/* --- NEW: Payment Options Radio Buttons --- */}
         <div className="flex flex-col mt-2">

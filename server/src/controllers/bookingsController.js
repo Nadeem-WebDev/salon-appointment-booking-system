@@ -131,8 +131,11 @@ export const verifyOtpAndBook = async (req, res) => {
     }
 
     const newBooking = await pool.query(
-      'INSERT INTO bookings (customer_name, phone, email, service_id, staff_id, appointment_time) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [customer_name, phone, email, service_id, staff_id, appointment_time]
+      `INSERT INTO bookings 
+       (customer_name, phone, email, service_id, staff_id, appointment_time, status, payment_status, amount_paid) 
+       VALUES ($1, $2, $3, $4, $5, $6, 'queued', 'manual-walkin', 0) 
+       RETURNING *`,
+      [customer_name, phone || null, email || null, service_id, staff_id, appointment_time]
     );
     
     otpStore.delete(email);
@@ -189,9 +192,9 @@ export async function updateBooking(req, res) {
     const { id } = req.params;
     const { customer_name, phone, service_id, appointment_time, status } = req.body;
 
-    // 1. Fetch the OLD status and full service/payment details before updating
+    // 1. Fetch the OLD status, payment, AND redeemed coins before updating
     const currentBookingRes = await pool.query(
-      `SELECT b.status, b.amount_paid, s.name as service_name, s.price as service_price, st.name as staff_name 
+      `SELECT b.status, b.amount_paid, b.coins_redeemed, s.name as service_name, s.price as service_price, st.name as staff_name 
        FROM bookings b 
        JOIN services s ON b.service_id = s.id 
        JOIN staff st ON b.staff_id = st.id 
@@ -203,24 +206,51 @@ export async function updateBooking(req, res) {
     const currentBooking = currentBookingRes.rows[0];
     const oldStatus = currentBooking.status;
 
-    // 2. Perform the update in database
+    // 2. Perform the standard booking update
     const result = await pool.query(
       `UPDATE bookings SET customer_name = $1, phone = $2, service_id = $3, appointment_time = $4, status = $5 WHERE id = $6 RETURNING *`,
       [customer_name, phone || null, service_id, appointment_time, status, id]
     );
 
-    // 3. Trigger Email Invoice ONLY if it just transitioned to 'completed'
+    // 3. --- NEW: THE SUPERCOIN & INVOICE LOGIC ---
     if (status === 'completed' && oldStatus !== 'completed') {
-      // Use the updated service if it was changed during the edit, otherwise use current
       const serviceRes = await pool.query(`SELECT name, price FROM services WHERE id = $1`, [service_id]);
       const serviceData = serviceRes.rows[0];
 
       const emailToSend = result.rows[0].email;
+      const clientPhone = result.rows[0].phone;
       const clientName = result.rows[0].customer_name;
+      
+      // --- NEW: DISCOUNT MATH ---
       const totalAmount = Number(serviceData.price);
       const paidAmount = Number(currentBooking.amount_paid || 0);
-      const dueAmount = totalAmount - paidAmount;
+      const discountAmount = Number(currentBooking.coins_redeemed || 0); 
+      // Ensure balance doesn't go below 0 if discount > total
+      const dueAmount = Math.max(0, totalAmount - paidAmount - discountAmount);
 
+      let earnedCoins = 0;
+      let totalCoinsBalance = 0;
+
+      // Check if eligible for Supercoins (Price > 1000 and has a phone number)
+      if (totalAmount > 1000 && clientPhone) {
+        // Calculate 5% of the total amount
+        earnedCoins = Number((totalAmount * 0.05).toFixed(2));
+        
+        // Add coins to customer's wallet
+        const walletRes = await pool.query(
+          `UPDATE customers SET supercoins = supercoins + $1 WHERE phone = $2 RETURNING supercoins`,
+          [earnedCoins, clientPhone]
+        );
+        
+        if (walletRes.rows.length > 0) {
+          totalCoinsBalance = Number(walletRes.rows[0].supercoins);
+        }
+
+        // Stamp the booking record with the coins earned for history
+        await pool.query(`UPDATE bookings SET coins_earned = $1 WHERE id = $2`, [earnedCoins, id]);
+      }
+
+      // Trigger Email Invoice if they have a real email
       if (emailToSend && emailToSend !== 'walkin@salon.local') {
         generateAndSendInvoiceEmail({
           email: emailToSend,
@@ -230,7 +260,11 @@ export async function updateBooking(req, res) {
           totalAmount,
           paidAmount,
           dueAmount,
-          bookingId: id
+          discountAmount,
+          bookingId: id,
+          // Pass the new coin data to the PDF generator!
+          earnedCoins,
+          totalCoinsBalance
         });
       }
     }
@@ -318,9 +352,8 @@ const razorpay = new Razorpay({
 // Create a Razorpay Order (WITH DOUBLE-BOOKING DEFENSE 1)
 export const createPaymentOrder = async (req, res) => {
   try {
-    // NEW: Accept payment_type from the frontend ('deposit' or 'full')
-    const { service_id, staff_id, appointment_time, payment_type } = req.body;
-
+    // --- Accept phone and redeem_coins ---
+    const { service_id, staff_id, appointment_time, payment_type, phone, redeem_coins } = req.body;
     // DEFENSE 1: Check if slot is already booked BEFORE generating a payment order
     const checkConflict = await pool.query(
       `SELECT id FROM bookings WHERE appointment_time = $1 AND staff_id = $2 AND status IN ('queued', 'in-progress')`,
@@ -337,8 +370,17 @@ export const createPaymentOrder = async (req, res) => {
 
     const fullPrice = Number(serviceRes.rows[0].price);
     
-    // NEW: Determine exactly how much to charge them
-    const amountToPay = payment_type === 'full' ? fullPrice : Math.round(fullPrice * 0.30);
+    // --- NEW: SAFEGUARDED DISCOUNT MATH ---
+    let discount = 0;
+    if (redeem_coins && phone && fullPrice >= 1000) {
+      const walletCheck = await pool.query(`SELECT supercoins FROM customers WHERE phone = $1`, [phone]);
+      if (walletCheck.rows.length > 0 && Number(walletCheck.rows[0].supercoins) >= 1000) {
+        discount = 1000;
+      }
+    }
+
+    const finalPriceAfterDiscount = fullPrice - discount;
+    const amountToPay = payment_type === 'full' ? finalPriceAfterDiscount : Math.round(finalPriceAfterDiscount * 0.30);
 
     // Create Razorpay Order
     const options = {
@@ -382,8 +424,8 @@ export const verifyPaymentAndBook = async (req, res) => {
     return res.status(400).json({ error: 'Invalid payment signature. Transaction failed.' });
   }
 
-  // Extract amount_paid instead of deposit_amount
-  const { customer_name, phone, email, service_id, staff_id, appointment_time, amount_paid } = bookingData;
+// --- Extract redeem_coins ---
+  const { customer_name, phone, email, service_id, staff_id, appointment_time, amount_paid, redeem_coins } = bookingData;
 
   try {
     // Final double-booking check
@@ -414,13 +456,38 @@ export const verifyPaymentAndBook = async (req, res) => {
       }
     }
 
-    // Save Booking to Database
+    let coinsToDeduct = 0;
+    // --- NEW: THE SUPERCOIN WALLET HOOK ---
+    // If phone exists, update name/email. If new, create wallet with 0 coins.
+    if (phone) {
+      await pool.query(
+        `INSERT INTO customers (phone, name, email) 
+         VALUES ($1, $2, $3)
+         ON CONFLICT (phone) 
+         DO UPDATE SET name = EXCLUDED.name, email = COALESCE(EXCLUDED.email, customers.email)`,
+        [phone, customer_name, email || null]
+      );
+    // Deduct coins safely if redeemed
+      if (redeem_coins) {
+        const servicePriceRes = await pool.query(`SELECT price FROM services WHERE id = $1`, [service_id]);
+        const servicePrice = servicePriceRes.rows.length > 0 ? Number(servicePriceRes.rows[0].price) : 0;
+        const walletCheck = await pool.query(`SELECT supercoins FROM customers WHERE phone = $1`, [phone]);
+        
+        if (walletCheck.rows.length > 0 && Number(walletCheck.rows[0].supercoins) >= 1000 && servicePrice >= 1000) {
+          await pool.query(`UPDATE customers SET supercoins = supercoins - 1000 WHERE phone = $1`, [phone]);
+          coinsToDeduct = 1000;
+        }
+      }
+    }
+
+    
+    // --- NEW: Save coins_redeemed in DB ---
     const newBooking = await pool.query(
       `INSERT INTO bookings 
-       (customer_name, phone, email, service_id, staff_id, appointment_time, status, payment_status, razorpay_order_id, razorpay_payment_id, amount_paid) 
-       VALUES ($1, $2, $3, $4, $5, $6, 'queued', 'paid', $7, $8, $9) 
+       (customer_name, phone, email, service_id, staff_id, appointment_time, status, payment_status, razorpay_order_id, razorpay_payment_id, amount_paid, coins_redeemed) 
+       VALUES ($1, $2, $3, $4, $5, $6, 'queued', 'paid', $7, $8, $9, $10) 
        RETURNING *`,
-      [customer_name, phone, email, service_id, staff_id, appointment_time, razorpay_order_id, razorpay_payment_id, amount_paid]
+      [customer_name, phone, email, service_id, staff_id, appointment_time, razorpay_order_id, razorpay_payment_id, amount_paid, coinsToDeduct]
     );
 
     // Fetch details for Email
@@ -433,14 +500,17 @@ export const verifyPaymentAndBook = async (req, res) => {
     
     const { service_name, full_price, staff_name } = detailsRes.rows[0];
     
-    // NEW: Calculate remaining balance and dynamic label
-    const remainingAmount = Number(full_price) - Number(amount_paid);
+    // --- NEW: Email Math with Discount ---
+    const remainingAmount = Math.max(0, Number(full_price) - Number(amount_paid) - coinsToDeduct);
     const paymentLabel = remainingAmount === 0 ? "100% Full Payment:" : "30% Deposit Paid:";
+    
+    // Add discount HTML row if coins were used
+    const discountHtmlRow = coinsToDeduct > 0 
+      ? `<tr><td style="padding: 5px 0;">Supercoin Discount:</td><td style="text-align: right; color: #3E8914;"><strong>- ₹${coinsToDeduct}</strong></td></tr>` 
+      : '';
 
     const formattedDate = new Date(appointment_time).toLocaleString('en-IN', {
-      dateStyle: 'full',
-      timeStyle: 'short',
-      timeZone: 'Asia/Kolkata'
+      dateStyle: 'full', timeStyle: 'short', timeZone: 'Asia/Kolkata'
     });
 
     // Send Confirmation Email via Brevo API
@@ -473,6 +543,7 @@ export const verifyPaymentAndBook = async (req, res) => {
               <h3 style="border-bottom: 1px solid #ddd; padding-bottom: 8px; color: #134611;">Payment Summary</h3>
               <table style="width: 100%; text-align: left; font-size: 14px;">
                 <tr><td style="padding: 5px 0;">Total Service Price:</td><td style="text-align: right;"><strong>₹${full_price}</strong></td></tr>
+                ${discountHtmlRow}
                 <tr><td style="padding: 5px 0;">${paymentLabel}</td><td style="text-align: right; color: #3E8914;"><strong>- ₹${amount_paid}</strong></td></tr>
                 <tr style="border-top: 1px solid #eee;"><td style="padding: 10px 0; font-size: 16px;"><strong>Remaining Due at Salon:</strong></td><td style="text-align: right; font-size: 16px; color: #134611;"><strong>₹${remainingAmount}</strong></td></tr>
               </table>
@@ -600,10 +671,11 @@ export const deleteService = async (req, res) => {
 };
 
 
-// --- NEW: Manual Admin/Walk-in Booking ---
+// --- Manual Admin/Walk-in Booking ---
 export async function createManualBooking(req, res) {
   try {
-    const { customer_name, phone, email, service_id, staff_id, appointment_time } = req.body;
+    // --- NEW: Added redeem_coins to the destructured body ---
+    const { customer_name, phone, email, service_id, staff_id, appointment_time, redeem_coins } = req.body;
 
     // Double-booking defense
     const checkConflict = await pool.query(
@@ -615,13 +687,46 @@ export async function createManualBooking(req, res) {
       return res.status(409).json({ error: 'This stylist is already booked at that exact time.' });
     }
 
-    // Insert with payment_status as 'manual-walkin' and bypass payment logic
+    let coinsToDeduct = 0;
+
+    // THE SUPERCOIN WALLET HOOK
+    if (phone) {
+      // 1. Create or update the user
+      await pool.query(
+        `INSERT INTO customers (phone, name, email) 
+         VALUES ($1, $2, $3)
+         ON CONFLICT (phone) 
+         DO UPDATE SET name = EXCLUDED.name, email = COALESCE(EXCLUDED.email, customers.email)`,
+        [phone, customer_name, email || null]
+      );
+
+      // 2. --- NEW: PROCESS COIN REDEMPTION ---
+      if (redeem_coins) {
+        // Fetch the service price to ensure it's worth at least 1000
+        const servicePriceRes = await pool.query(`SELECT price FROM services WHERE id = $1`, [service_id]);
+        const servicePrice = servicePriceRes.rows.length > 0 ? Number(servicePriceRes.rows[0].price) : 0;
+
+        // Security check: Must have 1000+ coins AND service price must be >= 1000
+        const walletCheck = await pool.query(`SELECT supercoins FROM customers WHERE phone = $1`, [phone]);
+        
+        if (walletCheck.rows.length > 0 && Number(walletCheck.rows[0].supercoins) >= 1000 && servicePrice >= 1000) {
+          // Deduct 1000 coins from their wallet
+          await pool.query(`UPDATE customers SET supercoins = supercoins - 1000 WHERE phone = $1`, [phone]);
+          coinsToDeduct = 1000;
+        } else {
+          // If they tried to cheat the system on a cheap service, reject the coin deduction
+          coinsToDeduct = 0;
+        }
+      }
+    }
+
+    // Insert with payment_status as 'manual-walkin', and save the coins_redeemed
     const newBooking = await pool.query(
       `INSERT INTO bookings 
-       (customer_name, phone, email, service_id, staff_id, appointment_time, status, payment_status, amount_paid) 
-       VALUES ($1, $2, $3, $4, $5, $6, 'queued', 'manual-walkin', 0) 
+       (customer_name, phone, email, service_id, staff_id, appointment_time, status, payment_status, amount_paid, coins_redeemed) 
+       VALUES ($1, $2, $3, $4, $5, $6, 'queued', 'manual-walkin', 0, $7) 
        RETURNING *`,
-      [customer_name, phone || null, email || 'walkin@salon.local', service_id, staff_id, appointment_time]
+      [customer_name, phone || null, email || null, service_id, staff_id, appointment_time, coinsToDeduct]
     );
 
     res.status(201).json(newBooking.rows[0]);
@@ -643,6 +748,15 @@ async function generateAndSendInvoiceEmail(data) {
       const pdfBuffer = Buffer.concat(buffers);
       const base64Pdf = pdfBuffer.toString('base64');
 
+      // --- NEW: Dynamic Email HTML (Shows coins if earned) ---
+      const coinHtmlBanner = data.earnedCoins > 0 ? `
+        <div style="background-color: #E8FCCF; border: 2px dashed #3E8914; padding: 15px; margin-top: 25px; border-radius: 8px; text-align: center;">
+          <h3 style="color: #134611; margin: 0 0 8px 0; font-size: 18px;">🎉 You earned ${data.earnedCoins} Supercoins!</h3>
+          <p style="color: #3E8914; margin: 0; font-weight: bold; font-size: 16px;">Total Balance: ${data.totalCoinsBalance} Coins</p>
+          <p style="color: #134611; font-size: 12px; margin-top: 8px; opacity: 0.8;">Reach 1000 coins for a flat discount on a future visit.</p>
+        </div>
+      ` : '';
+
       await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
@@ -663,6 +777,7 @@ async function generateAndSendInvoiceEmail(data) {
                 <p style="font-size: 16px;">Hi <strong>${data.customerName}</strong>,</p>
                 <p>We hope you loved your experience with us today!</p>
                 <p>We have attached your official final receipt PDF to this email for your records.</p>
+                ${coinHtmlBanner}
                 <p style="margin-top: 30px; font-weight: bold; text-align: center; color: #3E8914;">We look forward to seeing you again soon!</p>
               </div>
             </div>
@@ -673,7 +788,6 @@ async function generateAndSendInvoiceEmail(data) {
       console.log(`Invoice email sent successfully to ${data.email}`);
     });
 
-    // --- NEW DESIGN: Colors & Typography ---
     const darkGreen = '#134611';
     const accentGreen = '#3E8914';
     const grayText = '#555555';
@@ -683,14 +797,13 @@ async function generateAndSendInvoiceEmail(data) {
     doc.fontSize(14).fillColor(accentGreen).text(`INV-${data.bookingId}`, 400, 65, { align: 'right' });
     doc.moveDown(3);
 
-    // FROM & BILL TO Section (Side-by-Side)
     const infoTop = 130;
     
     // Left Side: FROM
     doc.font('Helvetica-Bold').fontSize(10).fillColor(accentGreen).text('FROM', 50, infoTop);
     doc.fontSize(12).fillColor(darkGreen).text('SalonBooker Studio', 50, infoTop + 15);
     doc.font('Helvetica').fontSize(10).fillColor(grayText);
-    doc.text('Bhagat Singh Nagar', 50, infoTop + 32);
+    doc.text('Near DN Nagar', 50, infoTop + 32);
     doc.text('Mumbai, Maharashtra, India', 50, infoTop + 46);
 
     // Right Side: BILL TO
@@ -702,56 +815,53 @@ async function generateAndSendInvoiceEmail(data) {
     // --- TABLE SECTION ---
     const tableTop = 240;
     
-    // Top border of table
     doc.moveTo(50, tableTop).lineTo(545, tableTop).lineWidth(1.5).strokeColor(accentGreen).stroke();
 
-    // Table Headers
     doc.font('Helvetica-Bold').fontSize(10).fillColor(accentGreen);
     doc.text('Description', 50, tableTop + 8);
     doc.text('Stylist', 250, tableTop + 8);
     doc.text('Amount', 445, tableTop + 8, { width: 100, align: 'right' });
 
-    // Bottom border of headers
     const rowTop = tableTop + 25;
     doc.moveTo(50, rowTop).lineTo(545, rowTop).lineWidth(1.5).strokeColor(accentGreen).stroke();
 
-    // Table Content Row
     const itemTop = rowTop + 10;
     doc.font('Helvetica').fontSize(11).fillColor(darkGreen);
     doc.text(data.serviceName, 50, itemTop);
     doc.text(data.staffName, 250, itemTop);
     doc.text(`Rs. ${data.totalAmount}`, 445, itemTop, { width: 100, align: 'right' });
 
-    // Subtle line below item
     doc.moveTo(50, itemTop + 20).lineTo(545, itemTop + 20).lineWidth(0.5).strokeColor('#e0e0e0').stroke();
 
     // --- CALCULATIONS SECTION ---
     const calcTop = itemTop + 40;
-    doc.font('Helvetica').fontSize(10).fillColor(grayText);
     const calcLeft = 320;
 
+    doc.font('Helvetica').fontSize(10).fillColor(grayText);
     doc.text('Total Amount:', calcLeft, calcTop);
     doc.font('Helvetica-Bold').fillColor(darkGreen).text(`Rs. ${data.totalAmount}`, 445, calcTop, { width: 100, align: 'right' });
 
     let nextY = calcTop + 20;
-    doc.font('Helvetica').fillColor(grayText);
     
-    // Dynamic Breakdown
-    if (data.paidAmount > 0 && data.dueAmount > 0) {
+    // 1. Show Discount (If Applicable)
+    if (data.discountAmount > 0) {
+      doc.font('Helvetica-Bold').fillColor(accentGreen).text('Supercoin Discount:', calcLeft, nextY);
+      doc.text(`- Rs. ${data.discountAmount}`, 445, nextY, { width: 100, align: 'right' });
+      nextY += 15;
+    }
+    
+    // 2. Show Online Deposit (If Applicable)
+    doc.font('Helvetica').fillColor(grayText);
+    if (data.paidAmount > 0) {
       doc.text('Online Deposit:', calcLeft, nextY);
       doc.text(`Rs. ${data.paidAmount}`, 445, nextY, { width: 100, align: 'right' });
       nextY += 15;
-      doc.text('Paid at Counter:', calcLeft, nextY);
-      doc.text(`Rs. ${data.dueAmount}`, 445, nextY, { width: 100, align: 'right' });
-    } else if (data.paidAmount > 0 && data.dueAmount === 0) {
-      doc.text('Paid Online:', calcLeft, nextY);
-      doc.text(`Rs. ${data.totalAmount}`, 445, nextY, { width: 100, align: 'right' });
-    } else {
-      doc.text('Paid at Counter:', calcLeft, nextY);
-      doc.text(`Rs. ${data.totalAmount}`, 445, nextY, { width: 100, align: 'right' });
     }
+    
+    // 3. Show Final Counter Due
+    doc.text('Paid at Counter:', calcLeft, nextY);
+    doc.text(`Rs. ${data.dueAmount}`, 445, nextY, { width: 100, align: 'right' });
 
-    // --- FINAL SOLID BLOCK (Like the example's orange total bar) ---
     const blockTop = nextY + 25;
     doc.rect(50, blockTop, 495, 30).fill(accentGreen);
     
@@ -759,8 +869,58 @@ async function generateAndSendInvoiceEmail(data) {
     doc.text('BALANCE DUE', 60, blockTop + 9);
     doc.text('Rs. 0', 445, blockTop + 9, { width: 90, align: 'right' });
 
+    // --- NEW: SUPERCOIN REWARD BADGE ON PDF ---
+    if (data.earnedCoins > 0) {
+      const coinTop = blockTop + 45;
+      
+      // Light green background block
+      doc.rect(50, coinTop, 495, 35).fill('#E8FCCF');
+      
+      // Border around the block
+      doc.rect(50, coinTop, 495, 35).lineWidth(1).strokeColor(accentGreen).stroke();
+
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(darkGreen);
+      doc.text(`REWARD: You earned ${data.earnedCoins} Supercoins!`, 65, coinTop + 12);
+      
+      doc.fillColor(accentGreen);
+      doc.text(`Total Balance: ${data.totalCoinsBalance} Coins`, 335, coinTop + 12, { width: 200, align: 'right' });
+    }
+
     doc.end();
   } catch (err) {
     console.error("Failed to generate PDF:", err);
+  }
+}
+
+
+// --- NEW: Fetch Customer Wallet by Phone ---
+export async function getCustomerByPhone(req, res) {
+  try {
+    const { phone } = req.params;
+    const result = await pool.query('SELECT name, email, supercoins FROM customers WHERE phone = $1', [phone]);
+    
+    if (result.rows.length === 0) {
+      return res.json({ exists: false, supercoins: 0 });
+    }
+    
+    res.json({ exists: true, ...result.rows[0] });
+  } catch (err) {
+    console.error('Error fetching customer:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+
+// --- NEW: Public Wallet Check (No Token Required) ---
+export async function checkWallet(req, res) {
+  try {
+    const { phone } = req.params;
+    const result = await pool.query('SELECT name, supercoins FROM customers WHERE phone = $1', [phone]);
+    
+    if (result.rows.length === 0) return res.json({ exists: false, supercoins: 0 });
+    res.json({ exists: true, supercoins: result.rows[0].supercoins, name: result.rows[0].name });
+  } catch (err) {
+    console.error('Error checking wallet:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 }

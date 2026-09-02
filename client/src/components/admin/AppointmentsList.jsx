@@ -12,10 +12,15 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [message, setMessage] = useState({ text: '', type: '' });
+
+  const [customerData, setCustomerData] = useState(null);
+  const [redeemCoins, setRedeemCoins] = useState(false);
   
   // NEW: Manual Booking Form State
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addForm, setAddForm] = useState({ customer_name: '', phone: '', email: 'walkin@salon.local', service_id: '', staff_id: '', appointment_time: '' });
+  const [addForm, setAddForm] = useState({ 
+    customer_name: '', phone: '', email: '', service_id: '', staff_id: '', date: '', time: '' 
+  });
 
   // NEW: Dynamic Data for Dropdowns
   const [services, setServices] = useState([]);
@@ -33,6 +38,38 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
   useEffect(() => {
     setCurrentPage(1);
   }, [filters?.searchTerm, filters?.statusFilter, filters?.dateFilter]);
+
+  // --- NEW: Live Wallet Search ---
+  useEffect(() => {
+    // Only search if phone is exactly 10 digits
+    const cleanPhone = addForm.phone.replace(/\D/g, '');
+    if (cleanPhone.length === 10) {
+      fetch(`${apiBase}/bookings/customer/${cleanPhone}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.exists) {
+          setCustomerData(data);
+          // Auto-fill their details so staff doesn't have to type it!
+          setAddForm(prev => ({
+            ...prev, 
+            customer_name: prev.customer_name || data.name, 
+            email: prev.email || data.email 
+          }));
+        } else {
+          setCustomerData(null);
+          setRedeemCoins(false);
+        }
+      })
+      .catch(err => console.error("Wallet check failed:", err));
+    } else {
+      setCustomerData(null);
+      setRedeemCoins(false);
+    }
+  }, [addForm.phone, apiBase, token]);
+
+
 
   const totalPages = Math.max(1, Math.ceil(bookings.length / itemsPerPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -59,10 +96,13 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
     return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
   };
 
-  // --- NEW: Handle Walk-in Booking Submission ---
+  // --- Handle Walk-in Booking Submission ---
   async function handleAddSubmit(e) {
     e.preventDefault();
     try {
+      // Combine strict date and strict time into standard ISO string
+      const finalAppointmentTime = new Date(`${addForm.date}T${addForm.time}:00`).toISOString();
+
       const res = await fetch(`${apiBase}/bookings`, {
         method: 'POST',
         headers: { 
@@ -71,7 +111,8 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
         },
         body: JSON.stringify({
           ...addForm,
-          appointment_time: new Date(addForm.appointment_time).toISOString()
+          appointment_time: finalAppointmentTime,
+          redeem_coins: redeemCoins
         })
       });
       const data = await res.json();
@@ -80,7 +121,7 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
       
       showToast('Walk-in appointment added successfully!');
       setShowAddForm(false);
-      setAddForm({ customer_name: '', phone: '', email: 'walkin@salon.local', service_id: '', staff_id: '', appointment_time: '' });
+      setAddForm({ customer_name: '', phone: '', email: '', service_id: '', staff_id: '', date: '', time: '' });
       onRefresh();
     } catch (err) {
       showToast(err.message, 'error');
@@ -136,6 +177,8 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
   }
 
   const inputClass = "py-2 px-3 border border-[#3DA35D] rounded-lg text-sm bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072] w-full";
+  const formInputClass = "w-full bg-white border border-black/10 text-[#134611] text-sm font-bold rounded-xl px-4 py-3 outline-none focus:border-[#3E8914] focus:ring-4 focus:ring-[#3E8914]/15 transition-all placeholder:font-medium placeholder:text-black/30 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]";
+  const formLabelClass = "block text-[10px] font-black text-[#134611]/60 uppercase tracking-wider mb-1.5 ml-1";
 
   return (
     <div className="animate-slideIn">
@@ -160,37 +203,141 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
               <h3 className="font-black text-[#134611] m-0 flex items-center gap-2"><PlusCircle size={18} /> New Appointment</h3>
               <button onClick={() => setShowAddForm(false)} className="text-[#3DA35D] hover:text-red-500 bg-transparent border-none cursor-pointer p-1"><X size={20}/></button>
             </div>
-            <form onSubmit={handleAddSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <label className="text-[11px] font-bold text-[#3E8914] uppercase">Customer Name *</label>
-                <input type="text" required value={addForm.customer_name} onChange={e => setAddForm({...addForm, customer_name: e.target.value})} className={inputClass} />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-[#3E8914] uppercase">Phone *</label>
-                <input type="tel" required value={addForm.phone} onChange={e => setAddForm({...addForm, phone: e.target.value})} className={inputClass} />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-[#3E8914] uppercase">Date & Time *</label>
-                <input type="datetime-local" required value={addForm.appointment_time} onChange={e => setAddForm({...addForm, appointment_time: e.target.value})} className={inputClass} />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-[#3E8914] uppercase">Service *</label>
-                <select required value={addForm.service_id} onChange={e => setAddForm({...addForm, service_id: e.target.value})} className={inputClass}>
-                  <option value="" disabled>Select Service</option>
-                  {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-[#3E8914] uppercase">Stylist *</label>
-                <select required value={addForm.staff_id} onChange={e => setAddForm({...addForm, staff_id: e.target.value})} className={inputClass}>
-                  <option value="" disabled>Select Stylist</option>
-                  {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-              <div className="flex items-end">
-                <button type="submit" className="w-full bg-[#3E8914] text-[#E8FCCF] py-2.5 rounded-lg font-bold border-none hover:bg-[#134611] transition-colors cursor-pointer shadow-sm">Save Booking</button>
-              </div>
-            </form>
+            {/* --- POLISHED WALK-IN FORM --- */}
+            <div className="mb-8">
+              {!showAddForm ? (
+                <button 
+                  onClick={() => setShowAddForm(true)}
+                  className="flex items-center gap-2 bg-[#134611] text-[#E8FCCF] py-3.5 px-6 rounded-2xl font-black hover:bg-[#3E8914] transition-all hover:shadow-lg hover:-translate-y-0.5 border-none cursor-pointer shadow-sm"
+                >
+                  <PlusCircle size={20} /> New Walk-in / Phone Booking
+                </button>
+              ) : (
+                <div className="bg-white/90 backdrop-blur-2xl border border-white p-1 rounded-[24px] shadow-[0_8px_30px_rgba(19,70,17,0.12)] relative overflow-hidden animate-slideIn">
+                  {/* Top decorative gradient bar */}
+                  <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#96E072] via-[#3E8914] to-[#134611]"></div>
+                  
+                  <div className="p-6 sm:p-8">
+                    <div className="flex justify-between items-start mb-6">
+                      <div>
+                        <h3 className="font-black text-[#134611] text-2xl m-0 flex items-center gap-2">
+                          <PlusCircle size={24} className="text-[#3E8914]" /> 
+                          New Appointment
+                        </h3>
+                        <p className="text-sm text-[#134611]/60 font-bold mt-1.5 mb-0">Manually block the schedule for a walk-in or phone call.</p>
+                      </div>
+                      <button onClick={() => setShowAddForm(false)} className="text-[#134611]/40 hover:text-red-500 hover:bg-red-50 p-2.5 rounded-full transition-all border-none cursor-pointer bg-transparent">
+                        <X size={24}/>
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleAddSubmit} className="flex flex-col gap-6">
+                      
+                      {/* Section 1: Client Details */}
+                      <div className="bg-[#96E072]/10 p-6 rounded-2xl border border-[#96E072]/20">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                          <div>
+                            <label className={formLabelClass}>Customer Name *</label>
+                            <input type="text" required value={addForm.customer_name} onChange={e => setAddForm({...addForm, customer_name: e.target.value})} className={formInputClass} placeholder="e.g. Jane Doe" />
+                          </div>
+                          <div>
+                            <label className={formLabelClass}>Phone *</label>
+                            <input type="tel" required value={addForm.phone} onChange={e => setAddForm({...addForm, phone: e.target.value})} className={formInputClass} placeholder="+91" />
+                          </div>
+                          <div>
+                            <label className={formLabelClass}>Email (Optional)</label>
+                            <input type="email" value={addForm.email} onChange={e => setAddForm({...addForm, email: e.target.value})} className={formInputClass} placeholder="For e-receipt" />
+                          </div>
+                        </div>
+                        {/* --- SUPERCOIN WALLET DISPLAY WITH SERVICE PRICE GUARD --- */}
+                        {customerData && (() => {
+                          const chosenService = services.find(s => String(s.id) === String(addForm.service_id));
+                          const servicePrice = chosenService ? Number(chosenService.price) : 0;
+                          const canRedeem = Number(customerData.supercoins) >= 1000 && servicePrice >= 1000;
+
+                          return (
+                            <div className="mt-5 p-4 bg-white rounded-xl border border-[#3E8914]/30 shadow-sm flex items-center justify-between animate-slideIn">
+                              <div>
+                                <p className="text-xs font-black text-[#3E8914] uppercase tracking-wider mb-1">Loyalty Wallet</p>
+                                <p className="text-sm font-bold text-[#134611] m-0">
+                                  Current Balance: <span className="bg-[#E8FCCF] px-2 py-0.5 rounded text-[#3E8914]">{customerData.supercoins} Coins</span>
+                                </p>
+                              </div>
+                              
+                              {Number(customerData.supercoins) >= 1000 ? (
+                                servicePrice >= 1000 ? (
+                                  <label className="flex items-center gap-3 cursor-pointer">
+                                    <span className="text-sm font-black text-[#134611]">Redeem 1000 Coins (₹1000 Off)</span>
+                                    <input 
+                                      type="checkbox" 
+                                      checked={redeemCoins} 
+                                      onChange={(e) => setRedeemCoins(e.target.checked)} 
+                                      className="w-5 h-5 accent-[#3E8914] cursor-pointer"
+                                    />
+                                  </label>
+                                ) : (
+                                  <p className="text-xs font-bold text-amber-700 m-0 text-right">
+                                    Service price must be ₹1000+<br/>to redeem Supercoins!
+                                  </p>
+                                )
+                              ) : (
+                                <p className="text-xs font-bold text-[#134611]/50 m-0 text-right">
+                                  Need {1000 - Number(customerData.supercoins)} more coins<br/>for a flat discount!
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Section 2: Service & Schedule */}
+                      <div className="bg-[#134611]/5 p-6 rounded-2xl border border-[#134611]/10">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                          <div>
+                            <label className={formLabelClass}>Service *</label>
+                            <select required value={addForm.service_id} onChange={e => setAddForm({...addForm, service_id: e.target.value})} className={formInputClass}>
+                              <option value="" disabled>Select Service</option>
+                              {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className={formLabelClass}>Stylist *</label>
+                            <select required value={addForm.staff_id} onChange={e => setAddForm({...addForm, staff_id: e.target.value})} className={formInputClass}>
+                              <option value="" disabled>Select Stylist</option>
+                              {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className={formLabelClass}>Date *</label>
+                            <input type="date" required min={new Date().toISOString().split('T')[0]} value={addForm.date} onChange={e => setAddForm({...addForm, date: e.target.value})} className={formInputClass} />
+                          </div>
+                          <div>
+                            <label className={formLabelClass}>Time *</label>
+                            <select required value={addForm.time} onChange={e => setAddForm({...addForm, time: e.target.value})} className={formInputClass}>
+                              <option value="" disabled>Select Time</option>
+                              {Array.from({ length: 23 }).map((_, i) => {
+                                const hour = Math.floor(i / 2) + 9; 
+                                const mins = i % 2 === 0 ? '00' : '30';
+                                const timeString = `${hour.toString().padStart(2, '0')}:${mins}`;
+                                const ampm = hour >= 12 ? 'PM' : 'AM';
+                                const displayHour = hour > 12 ? hour - 12 : hour;
+                                return <option key={timeString} value={timeString}>{`${displayHour}:${mins} ${ampm}`}</option>
+                              })}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Bar */}
+                      <div className="flex justify-end gap-3 mt-2 pt-2">
+                        <button type="button" onClick={() => setShowAddForm(false)} className="px-6 py-3.5 rounded-xl font-bold text-[#134611] bg-white border border-gray-200 hover:bg-gray-50 transition-colors shadow-sm cursor-pointer">Cancel</button>
+                        <button type="submit" className="px-8 py-3.5 rounded-xl font-black text-[#E8FCCF] bg-[#134611] hover:bg-[#3E8914] transition-all hover:shadow-lg hover:-translate-y-0.5 cursor-pointer border-none">Save Appointment</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
