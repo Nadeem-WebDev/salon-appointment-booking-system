@@ -553,6 +553,7 @@ export const verifyPaymentAndBook = async (req, res) => {
       })
     }).catch(err => console.error("Brevo Email Sending Error:", err));
 
+    sendWhatsAppConfirmation(phone, customer_name, service_name, formattedDate);
     res.status(201).json(newBooking.rows[0]);
   } catch (err) {
     console.error('Database Booking Error:', err);
@@ -922,5 +923,46 @@ export async function checkWallet(req, res) {
   } catch (err) {
     console.error('Error checking wallet:', err);
     res.status(500).json({ error: 'Server error' });
+  }
+}
+
+
+// --- NEW: WhatsApp API Dispatcher ---
+async function sendWhatsAppConfirmation(clientPhone, clientName, serviceName, date) {
+  // Clean phone number (remove +, spaces, etc)
+  const cleanPhone = clientPhone.replace(/\D/g, ''); 
+  // Ensure it has a country code (Defaults to 91 for India if 10 digits are passed)
+  const finalPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+
+  // The custom message we want to send
+  const messageText = `🎉 *Booking Confirmed!* 🎉\n\nHi *${clientName}*, your appointment for *${serviceName}* on *${date}* is officially confirmed.\n\nThank you for choosing SalonBooker Studio! We look forward to seeing you soon.`;
+
+  try {
+    const response = await fetch(`https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: finalPhone,
+        type: "text",
+        text: { 
+          preview_url: false,
+          body: messageText 
+        }
+      })
+    });
+    
+    const data = await response.json();
+    if (data.error) {
+      console.error("WhatsApp API Error:", data.error.message);
+    } else {
+      console.log(`WhatsApp confirmation successfully sent to ${finalPhone}`);
+    }
+  } catch (err) {
+    console.error("Failed to execute WhatsApp fetch:", err);
   }
 }
