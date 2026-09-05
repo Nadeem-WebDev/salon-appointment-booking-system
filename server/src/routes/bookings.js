@@ -1,7 +1,7 @@
 import express from 'express';
 import { verifyToken } from '../middleware/authMiddleware.js';
 import {
-  listBookings, getQueue, updateBooking, deleteBooking, requestOtp, verifyOtpAndBook, getBookedTimes, getServices, getStaff, getBusinessHours, updateBusinessHours, getBlockedDates, addBlockedDate, deleteBlockedDate, createPaymentOrder,verifyPaymentAndBook, getAdminStaff, addStaff, updateStaff, deleteStaff, getAdminServices, addService, updateService, deleteService, createManualBooking, getCustomerByPhone, checkWallet
+  listBookings, getQueue, updateBooking, deleteBooking, requestOtp, verifyOtpAndBook, getBookedTimes, getServices, getStaff, getBusinessHours, updateBusinessHours, getBlockedDates, addBlockedDate, deleteBlockedDate, createPaymentOrder,verifyPaymentAndBook, getAdminStaff, addStaff, updateStaff, deleteStaff, getAdminServices, addService, updateService, deleteService, createManualBooking, getCustomerByPhone, checkWallet, getAllUsers
 } from '../controllers/bookingsController.js';
 
 const router = express.Router();
@@ -24,6 +24,7 @@ router.put('/:id', verifyToken, updateBooking);
 router.delete('/:id', verifyToken, deleteBooking);
 router.get('/customer/:phone', verifyToken, getCustomerByPhone);
 router.get('/check-wallet/:phone', checkWallet);
+router.get('/customers', verifyToken, getAllUsers);
 
 // Settings Routes
 router.put('/settings/hours', verifyToken, updateBusinessHours);

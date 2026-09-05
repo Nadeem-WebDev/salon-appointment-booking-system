@@ -254,6 +254,7 @@ export async function updateBooking(req, res) {
       if (emailToSend && emailToSend !== 'walkin@salon.local') {
         generateAndSendInvoiceEmail({
           email: emailToSend,
+          clientPhone: phone,
           customerName: clientName,
           serviceName: serviceData.name,
           staffName: currentBooking.staff_name,
@@ -553,7 +554,7 @@ export const verifyPaymentAndBook = async (req, res) => {
       })
     }).catch(err => console.error("Brevo Email Sending Error:", err));
 
-    sendWhatsAppConfirmation(phone, customer_name, service_name, formattedDate);
+    sendWhatsAppConfirmation(phone, customer_name, service_name, formattedDate, null, null, 'booking');
     res.status(201).json(newBooking.rows[0]);
   } catch (err) {
     console.error('Database Booking Error:', err);
@@ -749,7 +750,7 @@ async function generateAndSendInvoiceEmail(data) {
       const pdfBuffer = Buffer.concat(buffers);
       const base64Pdf = pdfBuffer.toString('base64');
 
-      // --- NEW: Dynamic Email HTML (Shows coins if earned) ---
+      // --- EXISTING: Dynamic Email HTML (Shows coins if earned) ---
       const coinHtmlBanner = data.earnedCoins > 0 ? `
         <div style="background-color: #E8FCCF; border: 2px dashed #3E8914; padding: 15px; margin-top: 25px; border-radius: 8px; text-align: center;">
           <h3 style="color: #134611; margin: 0 0 8px 0; font-size: 18px;">🎉 You earned ${data.earnedCoins} Supercoins!</h3>
@@ -758,7 +759,7 @@ async function generateAndSendInvoiceEmail(data) {
         </div>
       ` : '';
 
-      await fetch('https://api.brevo.com/v3/smtp/email', {
+      fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
@@ -785,8 +786,22 @@ async function generateAndSendInvoiceEmail(data) {
           `,
           attachment: [{ content: base64Pdf, name: `Invoice_INV-${data.bookingId}.pdf` }]
         })
-      });
+      }).catch(err => console.error("Brevo Email Error:", err));
+      
       console.log(`Invoice email sent successfully to ${data.email}`);
+
+      // --- NEW: Route the generated PDF to WhatsApp ---
+      if (data.clientPhone) {
+        await sendWhatsAppConfirmation(
+          data.clientPhone,
+          data.customerName,
+          data.serviceName,
+          data.appointmentDate,
+          pdfBuffer,
+          data.bookingId,
+          'completion'
+        );
+      }
     });
 
     const darkGreen = '#134611';
@@ -927,42 +942,124 @@ export async function checkWallet(req, res) {
 }
 
 
-// --- NEW: WhatsApp API Dispatcher ---
-async function sendWhatsAppConfirmation(clientPhone, clientName, serviceName, date) {
-  // Clean phone number (remove +, spaces, etc)
+// --- WhatsApp API Dispatcher (Dual Mode: Booking & Completion) ---
+async function sendWhatsAppConfirmation(clientPhone, clientName, serviceName, date, pdfBuffer = null, bookingId = null, eventType = 'completion') {
   const cleanPhone = clientPhone.replace(/\D/g, ''); 
-  // Ensure it has a country code (Defaults to 91 for India if 10 digits are passed)
   const finalPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
 
-  // The custom message we want to send
-  const messageText = `🎉 *Booking Confirmed!* 🎉\n\nHi *${clientName}*, your appointment for *${serviceName}* on *${date}* is officially confirmed.\n\nThank you for choosing SalonBooker Studio! We look forward to seeing you soon.`;
-
   try {
-    const response = await fetch(`https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_ID}/messages`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: finalPhone,
-        type: "text",
-        text: { 
-          preview_url: false,
-          body: messageText 
-        }
-      })
-    });
+    // ==========================================
+    // MODE 1: BOOKING CONFIRMATION (Text Only)
+    // ==========================================
+    if (eventType === 'booking') {
+      console.log(`\n[WhatsApp] Sending Booking Confirmation text to ${finalPhone}...`);
+      
+      const bookingMessage = `🎉 *Booking Confirmed!* 🎉\n\nHi *${clientName}*, your appointment for *${serviceName}* on ${date} is officially confirmed.\n\nThank you for choosing SalonBooker Studio! We look forward to seeing you.`;
+
+      await fetch(`https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_ID}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: finalPhone,
+          type: "text",
+          text: { preview_url: false, body: bookingMessage }
+        })
+      });
+      console.log(`[WhatsApp] Booking text successfully sent!\n`);
+    } 
     
-    const data = await response.json();
-    if (data.error) {
-      console.error("WhatsApp API Error:", data.error.message);
-    } else {
-      console.log(`WhatsApp confirmation successfully sent to ${finalPhone}`);
+    // ==========================================
+    // MODE 2: SERVICE COMPLETED (PDF + Caption)
+    // ==========================================
+    else if (eventType === 'completion' && pdfBuffer) {
+      console.log(`\n[WhatsApp] 1. Preparing PDF invoice for upload...`);
+      const invoiceCaption = `✨ *Thank you for visiting!* ✨\n\nHi *${clientName}*, we hope you loved your *${serviceName}* today.\n\nYour final official receipt is attached with the message.\n\nWe look forward to seeing you again at SalonBooker Studio!`;
+      
+      const formData = new FormData();
+      formData.append('messaging_product', 'whatsapp');
+      const pdfBlob = new Blob([pdfBuffer], { type: 'application/pdf' });
+      formData.append('file', pdfBlob, `Invoice_INV-${bookingId}.pdf`);
+
+      console.log(`[WhatsApp] 2. Uploading PDF to Meta...`);
+      const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_ID}/media`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}` }, 
+        body: formData
+      });
+
+      const uploadData = await uploadRes.json();
+      
+      if (uploadData.id) {
+        console.log(`[WhatsApp] 3. Upload Success! Sending combined message to client...`);
+        await fetch(`https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_ID}/messages`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: finalPhone,
+            type: "document",
+            document: {
+              id: uploadData.id,
+              caption: invoiceCaption,
+              filename: `Invoice_INV-${bookingId}.pdf`
+            }
+          })
+        });
+        console.log(`[WhatsApp] Combined Invoice successfully sent to ${finalPhone}!\n`);
+      } else {
+        console.error("[WhatsApp] Media Upload Error:", uploadData);
+      }
     }
   } catch (err) {
-    console.error("Failed to execute WhatsApp fetch:", err);
+    console.error("[WhatsApp] CRITICAL ERROR executing fetch:", err);
   }
 }
+
+
+// --- NEW: Get All Users with Pagination ---
+export const getAllUsers = async (req, res) => {
+  try {
+    // 1. Get page and limit from the query URL (defaults to page 1, 10 users per page)
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // 2. Count total users to calculate total pages
+    // Note: Change 'users' to 'customers' if that is your table name!
+    const countResult = await pool.query('SELECT COUNT(*) FROM customers');
+    const totalUsers = parseInt(countResult.rows[0].count);
+    const totalPages = Math.ceil(totalUsers / limit);
+
+    // 3. Fetch exactly the 10 users for the current page
+    const usersResult = await pool.query(
+      `SELECT id, name, phone, email, supercoins, created_at 
+       FROM customers 
+       ORDER BY created_at DESC 
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+
+    // 4. Send it all to the frontend
+    res.status(200).json({
+      users: usersResult.rows,
+      pagination: {
+        totalUsers,
+        totalPages,
+        currentPage: page,
+        limit
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching users:", err);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+};

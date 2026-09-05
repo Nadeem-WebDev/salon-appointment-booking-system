@@ -7,9 +7,11 @@ import AnalyticsDashboard from './AnalyticsDashboard.jsx';
 import AppointmentsList from './AppointmentsList.jsx';
 import StaffManagement from './StaffManagement.jsx';
 import ServicesManagement from './ServicesManagement.jsx';
+import Customers from './Customers.jsx';
 
 import logo from '../../assets/logo.svg';
-import { ArrowLeft, LogOut, LayoutDashboard, ListTodo, Search, Calendar, Filter, Settings, Users, Scissors } from 'lucide-react';
+
+import { ArrowLeft, LogOut, LayoutDashboard, ListTodo, Search, Calendar, Filter, Settings, Users, Scissors,UsersRound } from 'lucide-react';
 
 export default function AdminPanel({ apiBase }) {
   const [token, setToken] = useState(sessionStorage.getItem('salonAdminToken') || null);
@@ -173,13 +175,19 @@ export default function AdminPanel({ apiBase }) {
                 to="/admin/staff"
                 className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
               >
-                <Users size={18} /> <span className="hidden sm:inline">Staff</span>
+                <Users size={18} /> <span className="hidden sm:inline">Staffs</span>
               </NavLink>
               <NavLink 
                 to="/admin/services"
                 className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
               >
                 <Scissors size={18} /> <span className="hidden sm:inline">Services</span>
+              </NavLink>
+              <NavLink 
+                to="/admin/customers"
+                className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+              >
+                <UsersRound size={18} /> <span className="hidden sm:inline">Customers</span>
               </NavLink>
             </>
           )}
@@ -262,6 +270,7 @@ export default function AdminPanel({ apiBase }) {
             <Route path="settings" element={<SettingsPanel apiBase={apiBase} token={token} />} />
             <Route path="staff" element={<StaffManagement apiBase={apiBase} token={token} />} />
             <Route path="services" element={<ServicesManagement apiBase={apiBase} token={token} />} />
+            <Route path="customers" element={<Customers apiBase={apiBase} token={token} />} />
           </>
         )}
 
