@@ -141,23 +141,24 @@ export default function AdminPanel({ apiBase }) {
         </button>
       </div>
 
-      <div className="mb-8 bg-white/50 backdrop-blur-xl border border-[#3DA35D]/30 p-2 rounded-2xl shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        
-        <div className="flex p-1 bg-white/50 rounded-xl w-full xl:w-auto border border-[#3DA35D]/20">
-          
+{/* Navigation & Filters Bar */}
+      <div className="mb-8 bg-white/50 backdrop-blur-xl border border-[#3DA35D]/30 p-2 rounded-2xl shadow-sm flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-4">
+                 
+        {/* Tabs Container - Perfectly centered items, invisible scrollbar */}
+        <div className="flex items-center overflow-x-auto p-1 bg-white/50 rounded-xl w-full 2xl:w-auto border border-[#3DA35D]/20 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                     
           {/* RBAC: Hide Analytics from Staff */}
           {role === 'admin' && (
-            <NavLink 
-              to="/admin/dashboard"
-              className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+            <NavLink
+               to="/admin/dashboard"
+              className={({ isActive }) => `shrink-0 flex-1 2xl:flex-none flex items-center justify-center gap-2 py-2 px-3 md:py-2.5 md:px-5 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
             >
               <LayoutDashboard size={18} /> <span className="hidden sm:inline">Analytics</span>
             </NavLink>
           )}
-
-          <NavLink 
-            to="/admin/appointments"
-            className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+          <NavLink
+             to="/admin/appointments"
+            className={({ isActive }) => `shrink-0 flex-1 2xl:flex-none flex items-center justify-center gap-2 py-2 px-3 md:py-2.5 md:px-5 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
           >
             <ListTodo size={18} /> <span className="hidden sm:inline">Appointments</span>
           </NavLink>
@@ -165,27 +166,27 @@ export default function AdminPanel({ apiBase }) {
           {/* RBAC: Hide Management tabs from Staff */}
           {role === 'admin' && (
             <>
-              <NavLink 
-                to="/admin/settings"
-                className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+              <NavLink
+                 to="/admin/settings"
+                className={({ isActive }) => `shrink-0 flex-1 2xl:flex-none flex items-center justify-center gap-2 py-2 px-3 md:py-2.5 md:px-5 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
               >
                 <Settings size={18} /> <span className="hidden sm:inline">Work Hours</span>
               </NavLink>
-              <NavLink 
-                to="/admin/staff"
-                className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+              <NavLink
+                 to="/admin/staff"
+                className={({ isActive }) => `shrink-0 flex-1 2xl:flex-none flex items-center justify-center gap-2 py-2 px-3 md:py-2.5 md:px-5 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
               >
                 <Users size={18} /> <span className="hidden sm:inline">Staffs</span>
               </NavLink>
-              <NavLink 
-                to="/admin/services"
-                className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+              <NavLink
+                 to="/admin/services"
+                className={({ isActive }) => `shrink-0 flex-1 2xl:flex-none flex items-center justify-center gap-2 py-2 px-3 md:py-2.5 md:px-5 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
               >
                 <Scissors size={18} /> <span className="hidden sm:inline">Services</span>
               </NavLink>
-              <NavLink 
-                to="/admin/customers"
-                className={({ isActive }) => `flex-1 xl:flex-none flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
+              <NavLink
+                 to="/admin/customers"
+                className={({ isActive }) => `shrink-0 flex-1 2xl:flex-none flex items-center justify-center gap-2 py-2 px-3 md:py-2.5 md:px-5 rounded-lg font-bold text-sm transition-all duration-300 border-none cursor-pointer no-underline ${isActive ? 'bg-[#3E8914] text-[#E8FCCF] shadow-md' : 'bg-transparent text-[#3E8914] hover:text-[#134611] hover:bg-[#96E072]/20'}`}
               >
                 <UsersRound size={18} /> <span className="hidden sm:inline">Customers</span>
               </NavLink>
@@ -193,10 +194,10 @@ export default function AdminPanel({ apiBase }) {
           )}
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col md:flex-row items-center gap-3 w-full xl:w-auto p-2 xl:p-0">
+        {/* Filters Container */}
+        <div className="flex flex-col md:flex-row items-center justify-end gap-3 w-full 2xl:w-auto p-2 2xl:p-0">
           {isAppointmentsPage && (
-            <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
+            <div className="flex flex-col sm:flex-row gap-3 w-full 2xl:w-auto">
               <div className="relative w-full sm:w-auto md:w-56">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3DA35D]" />
                 <input
@@ -223,7 +224,6 @@ export default function AdminPanel({ apiBase }) {
               </div>
             </div>
           )}
-
           <div className="relative w-full sm:w-auto md:w-48">
              <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3DA35D] pointer-events-none" />
             <input
@@ -233,8 +233,8 @@ export default function AdminPanel({ apiBase }) {
               className="w-full pl-9 pr-8 py-2.5 bg-white/70 border border-[#3DA35D]/50 rounded-xl text-sm text-[#134611] font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-[#96E072]/50 focus:border-[#3E8914] focus:bg-white"
             />
             {dateFilter && (
-              <button 
-                onClick={() => setDateFilter('')}
+              <button
+                 onClick={() => setDateFilter('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-[#3DA35D] hover:text-red-500 transition-colors bg-transparent border-none cursor-pointer font-bold"
                 title="Clear date"
               >
