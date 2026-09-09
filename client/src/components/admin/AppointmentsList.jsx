@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, X } from 'lucide-react';
+import { PlusCircle, Pencil, Trash2, Check, X, Coins, CalendarSearch } from 'lucide-react';
+import {
+  Button, IconButton, Card, Field, Input, Select, Checkbox, Modal, Toast,
+  StatusBadge, Badge, EmptyState, Pagination, Table, Td, Tr,
+} from '../ui/index.js';
 
-const badgeColors = {
-  'queued': 'bg-[#96E072]/30 text-[#134611] border border-[#96E072]/50',
-  'in-progress': 'bg-[#3DA35D]/30 text-[#134611] border border-[#3DA35D]/50',
-  'completed': 'bg-[#3E8914]/30 text-[#134611] border border-[#3E8914]/50',
-  'cancelled': 'bg-red-500/20 text-red-800 border border-red-500/30'
-};
+const STATUS_OPTIONS = [
+  { value: 'queued', label: 'Queued' },
+  { value: 'in-progress', label: 'In progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
 
 export default function AppointmentsList({ bookings, apiBase, onRefresh, filters, token, role }) {
   const [editingId, setEditingId] = useState(null);
@@ -15,14 +19,12 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
 
   const [customerData, setCustomerData] = useState(null);
   const [redeemCoins, setRedeemCoins] = useState(false);
-  
-  // NEW: Manual Booking Form State
+
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addForm, setAddForm] = useState({ 
-    customer_name: '', phone: '', email: '', service_id: '', staff_id: '', date: '', time: '' 
+  const [addForm, setAddForm] = useState({
+    customer_name: '', phone: '', email: '', service_id: '', staff_id: '', date: '', time: '',
   });
 
-  // NEW: Dynamic Data for Dropdowns
   const [services, setServices] = useState([]);
   const [staff, setStaff] = useState([]);
 
@@ -30,46 +32,41 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
   const itemsPerPage = 10;
 
   useEffect(() => {
-    // Fetch live services and staff for the dropdowns
-    fetch(`${apiBase}/bookings/services`).then(r => r.json()).then(setServices);
-    fetch(`${apiBase}/bookings/staff`).then(r => r.json()).then(setStaff);
+    fetch(`${apiBase}/bookings/services`).then((r) => r.json()).then(setServices);
+    fetch(`${apiBase}/bookings/staff`).then((r) => r.json()).then(setStaff);
   }, [apiBase]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [filters?.searchTerm, filters?.statusFilter, filters?.dateFilter]);
 
-  // --- NEW: Live Wallet Search ---
+  // Live wallet lookup once a full phone number is entered
   useEffect(() => {
-    // Only search if phone is exactly 10 digits
     const cleanPhone = addForm.phone.replace(/\D/g, '');
     if (cleanPhone.length === 10) {
       fetch(`${apiBase}/bookings/customer/${cleanPhone}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       })
-      .then(res => res.json())
-      .then(data => {
-        if (data.exists) {
-          setCustomerData(data);
-          // Auto-fill their details so staff doesn't have to type it!
-          setAddForm(prev => ({
-            ...prev, 
-            customer_name: prev.customer_name || data.name, 
-            email: prev.email || data.email 
-          }));
-        } else {
-          setCustomerData(null);
-          setRedeemCoins(false);
-        }
-      })
-      .catch(err => console.error("Wallet check failed:", err));
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.exists) {
+            setCustomerData(data);
+            setAddForm((prev) => ({
+              ...prev,
+              customer_name: prev.customer_name || data.name,
+              email: prev.email || data.email,
+            }));
+          } else {
+            setCustomerData(null);
+            setRedeemCoins(false);
+          }
+        })
+        .catch((err) => console.error('Wallet check failed:', err));
     } else {
       setCustomerData(null);
       setRedeemCoins(false);
     }
   }, [addForm.phone, apiBase, token]);
-
-
 
   const totalPages = Math.max(1, Math.ceil(bookings.length / itemsPerPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -86,7 +83,7 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
     const d = new Date(isoString);
     const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
     const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return `${dateStr} • ${timeStr}`;
+    return `${dateStr} · ${timeStr}`;
   };
 
   const formatForInput = (isoString) => {
@@ -96,32 +93,29 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
     return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
   };
 
-  // --- Handle Walk-in Booking Submission ---
+  const resetAddForm = () => {
+    setShowAddForm(false);
+    setAddForm({ customer_name: '', phone: '', email: '', service_id: '', staff_id: '', date: '', time: '' });
+    setCustomerData(null);
+    setRedeemCoins(false);
+  };
+
   async function handleAddSubmit(e) {
     e.preventDefault();
     try {
-      // Combine strict date and strict time into standard ISO string
       const finalAppointmentTime = new Date(`${addForm.date}T${addForm.time}:00`).toISOString();
 
       const res = await fetch(`${apiBase}/bookings`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({
-          ...addForm,
-          appointment_time: finalAppointmentTime,
-          redeem_coins: redeemCoins
-        })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...addForm, appointment_time: finalAppointmentTime, redeem_coins: redeemCoins }),
       });
       const data = await res.json();
-      
+
       if (!res.ok) throw new Error(data.error || 'Failed to add appointment');
-      
-      showToast('Walk-in appointment added successfully!');
-      setShowAddForm(false);
-      setAddForm({ customer_name: '', phone: '', email: '', service_id: '', staff_id: '', date: '', time: '' });
+
+      showToast('Walk-in appointment added.');
+      resetAddForm();
       onRefresh();
     } catch (err) {
       showToast(err.message, 'error');
@@ -132,24 +126,20 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
     try {
       const res = await fetch(`${apiBase}/bookings/${editingId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(editForm)
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(editForm),
       });
-      
+
       if (!res.ok) throw new Error('Failed to update');
-      
-      // --- NEW: Smart Toast Notifications ---
+
       if (editForm.status === 'completed') {
-        // If they have a real email, confirm the invoice dispatch
         if (editForm.email && editForm.email !== 'walkin@salon.local') {
-          showToast(`✓ Booking completed! Invoice sent to ${editForm.email}`);
+          showToast(`Booking completed. Invoice sent to ${editForm.email}`);
         } else {
-          // If it's a walk-in, just confirm the closure
-          showToast('✓ Walk-in appointment completed and closed!');
+          showToast('Walk-in appointment completed and closed.');
         }
       } else {
-        // Fallback for other status changes (queued, in-progress, etc.)
-        showToast('Booking updated successfully');
+        showToast('Booking updated.');
       }
 
       setEditingId(null);
@@ -159,446 +149,468 @@ export default function AppointmentsList({ bookings, apiBase, onRefresh, filters
     }
   }
 
-  
   async function handleDelete(id) {
-    if (window.confirm('Delete this booking?')) {
-      try {
-        const res = await fetch(`${apiBase}/bookings/${id}`, { 
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error('Failed to delete');
-        showToast('Booking deleted');
-        onRefresh();
-      } catch (err) {
-        showToast('Error deleting booking', 'error');
-      }
+    if (!window.confirm('Delete this booking? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`${apiBase}/bookings/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      showToast('Booking deleted.');
+      onRefresh();
+    } catch (err) {
+      showToast('Error deleting booking', 'error');
     }
   }
 
-  const inputClass = "py-2 px-3 border border-[#3DA35D] rounded-lg text-sm bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072] w-full";
-  const formInputClass = "w-full bg-white border border-black/10 text-[#134611] text-sm font-bold rounded-xl px-4 py-3 outline-none focus:border-[#3E8914] focus:ring-4 focus:ring-[#3E8914]/15 transition-all placeholder:font-medium placeholder:text-black/30 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]";
-  const formLabelClass = "block text-[10px] font-black text-[#134611]/60 uppercase tracking-wider mb-1.5 ml-1";
+  const chosenService = services.find((s) => String(s.id) === String(addForm.service_id));
+  const servicePrice = chosenService ? Number(chosenService.price) : 0;
+  const walletCoins = customerData ? Number(customerData.supercoins) : 0;
 
   return (
-    <div className="animate-slideIn">
-      {message.text && (
-        <div className={`p-4 rounded-xl font-bold text-[14px] mb-4 animate-slideIn border-l-4 ${message.type === 'error' ? 'bg-red-100 text-red-700 border-red-500' : 'bg-[#96E072]/30 text-[#134611] border-[#3E8914]'}`}>
-          {message.text}
-        </div>
-      )}
+    <div className="animate-slideIn flex flex-col gap-5">
+      <Toast message={message} onDismiss={() => setMessage({ text: '', type: '' })} />
 
-      {/* --- NEW: Walk-in Booking Section --- */}
-      <div className="mb-6">
-        {!showAddForm ? (
-          <button 
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2 bg-[#134611] text-[#E8FCCF] py-2.5 px-5 rounded-xl font-bold hover:bg-[#3E8914] transition-all border-none cursor-pointer shadow-sm"
-          >
-            <PlusCircle size={18} /> Walk-in / Phone Booking
-          </button>
-        ) : (
-          <div className="bg-white/60 backdrop-blur-xl border border-[#3DA35D]/30 p-5 rounded-2xl shadow-sm">
-            <div className="flex justify-between items-center mb-4 pb-3 border-b border-[#3DA35D]/20">
-              <h3 className="font-black text-[#134611] m-0 flex items-center gap-2"><PlusCircle size={18} /> New Appointment</h3>
-              <button onClick={() => setShowAddForm(false)} className="text-[#3DA35D] hover:text-red-500 bg-transparent border-none cursor-pointer p-1"><X size={20}/></button>
-            </div>
-            {/* --- POLISHED WALK-IN FORM --- */}
-            <div className="mb-8">
-              {!showAddForm ? (
-                <button 
-                  onClick={() => setShowAddForm(true)}
-                  className="flex items-center gap-2 bg-[#134611] text-[#E8FCCF] py-3.5 px-6 rounded-2xl font-black hover:bg-[#3E8914] transition-all hover:shadow-lg hover:-translate-y-0.5 border-none cursor-pointer shadow-sm"
-                >
-                  <PlusCircle size={20} /> New Walk-in / Phone Booking
-                </button>
-              ) : (
-                <div className="bg-white/90 backdrop-blur-2xl border border-white p-1 rounded-[24px] shadow-[0_8px_30px_rgba(19,70,17,0.12)] relative overflow-hidden animate-slideIn">
-                  {/* Top decorative gradient bar */}
-                  <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#96E072] via-[#3E8914] to-[#134611]"></div>
-                  
-                  <div className="p-6 sm:p-8">
-                    <div className="flex justify-between items-start mb-6">
-                      <div>
-                        <h3 className="font-black text-[#134611] text-2xl m-0 flex items-center gap-2">
-                          <PlusCircle size={24} className="text-[#3E8914]" /> 
-                          New Appointment
-                        </h3>
-                        <p className="text-sm text-[#134611]/60 font-bold mt-1.5 mb-0">Manually block the schedule for a walk-in or phone call.</p>
-                      </div>
-                      <button onClick={() => setShowAddForm(false)} className="text-[#134611]/40 hover:text-red-500 hover:bg-red-50 p-2.5 rounded-full transition-all border-none cursor-pointer bg-transparent">
-                        <X size={24}/>
-                      </button>
-                    </div>
-
-                    <form onSubmit={handleAddSubmit} className="flex flex-col gap-6">
-                      
-                      {/* Section 1: Client Details */}
-                      <div className="bg-[#96E072]/10 p-6 rounded-2xl border border-[#96E072]/20">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                          <div>
-                            <label className={formLabelClass}>Customer Name *</label>
-                            <input type="text" required value={addForm.customer_name} onChange={e => setAddForm({...addForm, customer_name: e.target.value})} className={formInputClass} placeholder="e.g. Jane Doe" />
-                          </div>
-                          <div>
-                            <label className={formLabelClass}>Phone *</label>
-                            <input type="tel" required value={addForm.phone} onChange={e => setAddForm({...addForm, phone: e.target.value})} className={formInputClass} placeholder="+91" />
-                          </div>
-                          <div>
-                            <label className={formLabelClass}>Email (Optional)</label>
-                            <input type="email" value={addForm.email} onChange={e => setAddForm({...addForm, email: e.target.value})} className={formInputClass} placeholder="For e-receipt" />
-                          </div>
-                        </div>
-                        {/* --- SUPERCOIN WALLET DISPLAY WITH SERVICE PRICE GUARD --- */}
-                        {customerData && (() => {
-                          const chosenService = services.find(s => String(s.id) === String(addForm.service_id));
-                          const servicePrice = chosenService ? Number(chosenService.price) : 0;
-                          const canRedeem = Number(customerData.supercoins) >= 1000 && servicePrice >= 1000;
-
-                          return (
-                            <div className="mt-5 p-4 bg-white rounded-xl border border-[#3E8914]/30 shadow-sm flex items-center justify-between animate-slideIn">
-                              <div>
-                                <p className="text-xs font-black text-[#3E8914] uppercase tracking-wider mb-1">Loyalty Wallet</p>
-                                <p className="text-sm font-bold text-[#134611] m-0">
-                                  Current Balance: <span className="bg-[#E8FCCF] px-2 py-0.5 rounded text-[#3E8914]">{customerData.supercoins} Coins</span>
-                                </p>
-                              </div>
-                              
-                              {Number(customerData.supercoins) >= 1000 ? (
-                                servicePrice >= 1000 ? (
-                                  <label className="flex items-center gap-3 cursor-pointer">
-                                    <span className="text-sm font-black text-[#134611]">Redeem 1000 Coins (₹1000 Off)</span>
-                                    <input 
-                                      type="checkbox" 
-                                      checked={redeemCoins} 
-                                      onChange={(e) => setRedeemCoins(e.target.checked)} 
-                                      className="w-5 h-5 accent-[#3E8914] cursor-pointer"
-                                    />
-                                  </label>
-                                ) : (
-                                  <p className="text-xs font-bold text-amber-700 m-0 text-right">
-                                    Service price must be ₹1000+<br/>to redeem Supercoins!
-                                  </p>
-                                )
-                              ) : (
-                                <p className="text-xs font-bold text-[#134611]/50 m-0 text-right">
-                                  Need {1000 - Number(customerData.supercoins)} more coins<br/>for a flat discount!
-                                </p>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Section 2: Service & Schedule */}
-                      <div className="bg-[#134611]/5 p-6 rounded-2xl border border-[#134611]/10">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                          <div>
-                            <label className={formLabelClass}>Service *</label>
-                            <select required value={addForm.service_id} onChange={e => setAddForm({...addForm, service_id: e.target.value})} className={formInputClass}>
-                              <option value="" disabled>Select Service</option>
-                              {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className={formLabelClass}>Stylist *</label>
-                            <select required value={addForm.staff_id} onChange={e => setAddForm({...addForm, staff_id: e.target.value})} className={formInputClass}>
-                              <option value="" disabled>Select Stylist</option>
-                              {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className={formLabelClass}>Date *</label>
-                            <input type="date" required min={new Date().toISOString().split('T')[0]} value={addForm.date} onChange={e => setAddForm({...addForm, date: e.target.value})} className={formInputClass} />
-                          </div>
-                          <div>
-                            <label className={formLabelClass}>Time *</label>
-                            <select required value={addForm.time} onChange={e => setAddForm({...addForm, time: e.target.value})} className={formInputClass}>
-                              <option value="" disabled>Select Time</option>
-                              {Array.from({ length: 23 }).map((_, i) => {
-                                const hour = Math.floor(i / 2) + 9; 
-                                const mins = i % 2 === 0 ? '00' : '30';
-                                const timeString = `${hour.toString().padStart(2, '0')}:${mins}`;
-                                const ampm = hour >= 12 ? 'PM' : 'AM';
-                                const displayHour = hour > 12 ? hour - 12 : hour;
-                                return <option key={timeString} value={timeString}>{`${displayHour}:${mins} ${ampm}`}</option>
-                              })}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Bar */}
-                      <div className="flex justify-end gap-3 mt-2 pt-2">
-                        <button type="button" onClick={() => setShowAddForm(false)} className="px-6 py-3.5 rounded-xl font-bold text-[#134611] bg-white border border-gray-200 hover:bg-gray-50 transition-colors shadow-sm cursor-pointer">Cancel</button>
-                        <button type="submit" className="px-8 py-3.5 rounded-xl font-black text-[#E8FCCF] bg-[#134611] hover:bg-[#3E8914] transition-all hover:shadow-lg hover:-translate-y-0.5 cursor-pointer border-none">Save Appointment</button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="m-0 text-[13px] text-content-secondary tabular-nums">
+          Showing <span className="text-content font-semibold">{bookings.length}</span>{' '}
+          {bookings.length === 1 ? 'appointment' : 'appointments'}
+        </p>
+        <Button size="sm" onClick={() => setShowAddForm(true)}>
+          <PlusCircle size={16} aria-hidden="true" /> Walk-in booking
+        </Button>
       </div>
 
-      <div className="mb-3 px-1 text-sm text-[#134611]/70 font-bold">
-        Showing {bookings.length} results
-      </div>
-
-      {/* --- MOBILE CARD VIEW --- */}
-      <div className="grid grid-cols-1 gap-4 lg:hidden">
+      {/* ---------- MOBILE CARDS ---------- */}
+      <div className="grid grid-cols-1 gap-3 lg:hidden">
         {currentBookings.length === 0 && (
-          <div className="text-center py-8 text-[#134611]/60 bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_4px_20px_rgba(19,70,17,0.05)] font-bold">No appointments found.</div>
+          <EmptyState
+            icon={CalendarSearch}
+            title="No appointments found"
+            description="Try a different date or clear the filters."
+          />
         )}
-        {currentBookings.map(booking => (
-          <div key={booking.id} className="bg-white/50 backdrop-blur-xl p-5 rounded-2xl shadow-[0_4px_20px_rgba(19,70,17,0.05)] flex flex-col gap-4 border border-[#3DA35D]/30 min-w-0">
-            <div className="flex justify-between items-start gap-2">
-              <div className="min-w-0 flex-1">
-                <span className="text-xs text-[#3E8914] font-black uppercase tracking-wider">ID: {booking.id}</span>
-                <h3 className="font-black text-[#134611] text-lg m-0 truncate mt-1">{booking.customer_name}</h3>
-                <p className="text-xs text-[#3DA35D] font-bold mt-0.5 m-0 truncate">{booking.email}</p>
-              </div>
-              
-              <div className="shrink-0">
-                {editingId === booking.id ? (
-                  <select
-                    className="py-1.5 px-2 border border-[#3DA35D] rounded-lg text-xs bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072]"
+        {currentBookings.map((booking) => {
+          const isEditing = editingId === booking.id;
+          return (
+            <Card key={booking.id} className="p-4 flex flex-col gap-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-content-muted tabular-nums">
+                    #{booking.id}
+                  </span>
+                  <p className="m-0 mt-1 font-semibold text-content text-[15px] truncate">
+                    {booking.customer_name}
+                  </p>
+                  <p className="m-0 mt-0.5 text-[12px] text-content-muted truncate">{booking.email}</p>
+                </div>
+                {isEditing ? (
+                  <Select
+                    aria-label="Status"
+                    className="h-9 w-36 shrink-0 text-[13px]"
                     value={editForm.status}
-                    onChange={e => setEditForm({ ...editForm, status: e.target.value })}
+                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
                   >
-                    <option value="queued">Queued</option>
-                    <option value="in-progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
+                    {STATUS_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </Select>
                 ) : (
-                  <span className={`inline-block py-1 px-3 rounded-lg font-black text-[10px] uppercase whitespace-nowrap ${badgeColors[booking.status]}`}>{booking.status}</span>
+                  <StatusBadge status={booking.status} className="shrink-0" />
                 )}
               </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-3 text-sm text-[#134611] mt-1 bg-white/40 p-3 rounded-xl border border-white/50">
-              <div className="min-w-0">
-                <p className="text-[11px] text-[#3E8914] font-bold uppercase tracking-wider m-0 mb-1">Service</p>
-                {editingId === booking.id ? (
-                  <select
-                    className="w-full py-1 px-2 border border-[#3DA35D] rounded-lg text-xs bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072]"
-                    value={editForm.service_id}
-                    onChange={e => setEditForm({ ...editForm, service_id: e.target.value })}
-                  >
-                    {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                ) : (
-                  <p className="font-bold m-0 truncate">{booking.service}</p>
-                )}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] text-[#3E8914] font-bold uppercase tracking-wider m-0 mb-1">Stylist</p>
-                {editingId === booking.id ? (
-                  <select
-                    className="w-full py-1 px-2 border border-[#3DA35D] rounded-lg text-xs bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072]"
-                    value={editForm.staff_id}
-                    onChange={e => setEditForm({ ...editForm, staff_id: e.target.value })}
-                  >
-                    {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                ) : (
-                  <p className="font-bold m-0 truncate">{booking.staff_name || '-'}</p>
-                )}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] text-[#3E8914] font-bold uppercase tracking-wider m-0 mb-1">Phone</p>
-                {editingId === booking.id ? (
-                  <input
-                    type="tel"
-                    className="w-full py-1 px-2 border border-[#3DA35D] rounded-lg text-xs bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072]"
-                    value={editForm.phone || ''}
-                    onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
-                  />
-                ) : (
-                  <p className="font-bold m-0 truncate">{booking.phone || '-'}</p>
-                )}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] text-[#3E8914] font-bold uppercase tracking-wider m-0 mb-1">Time</p>
-                {editingId === booking.id ? (
-                  <input
-                    type="datetime-local"
-                    className="w-full py-1 px-2 border border-[#3DA35D] rounded-lg text-xs bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072]"
-                    value={formatForInput(editForm.appointment_time)}
-                    onChange={e => setEditForm({ ...editForm, appointment_time: new Date(e.target.value).toISOString() })}
-                  />
-                ) : (
-                  <p className="font-bold m-0 truncate">{formatDateTime(booking.appointment_time)}</p>
-                )}
-              </div>
-            </div>
+              <dl className="grid grid-cols-2 gap-3 m-0 bg-surface-sunken border border-subtle rounded-[var(--radius-md)] p-3">
+                <div className="min-w-0">
+                  <dt className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-content-muted mb-1">Service</dt>
+                  <dd className="m-0">
+                    {isEditing ? (
+                      <Select
+                        aria-label="Service"
+                        className="h-9 text-[13px]"
+                        value={editForm.service_id}
+                        onChange={(e) => setEditForm({ ...editForm, service_id: e.target.value })}
+                      >
+                        {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </Select>
+                    ) : (
+                      <span className="text-[13px] text-content truncate block">{booking.service}</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-content-muted mb-1">Stylist</dt>
+                  <dd className="m-0">
+                    {isEditing ? (
+                      <Select
+                        aria-label="Stylist"
+                        className="h-9 text-[13px]"
+                        value={editForm.staff_id}
+                        onChange={(e) => setEditForm({ ...editForm, staff_id: e.target.value })}
+                      >
+                        {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </Select>
+                    ) : (
+                      <span className="text-[13px] text-content truncate block">{booking.staff_name || '—'}</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-content-muted mb-1">Phone</dt>
+                  <dd className="m-0">
+                    {isEditing ? (
+                      <Input
+                        aria-label="Phone"
+                        type="tel"
+                        className="h-9 text-[13px]"
+                        value={editForm.phone || ''}
+                        onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                      />
+                    ) : (
+                      <span className="text-[13px] text-content truncate block tabular-nums">{booking.phone || '—'}</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="m-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-content-muted mb-1">Time</dt>
+                  <dd className="m-0">
+                    {isEditing ? (
+                      <Input
+                        aria-label="Appointment time"
+                        type="datetime-local"
+                        className="h-9 text-[13px]"
+                        value={formatForInput(editForm.appointment_time)}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, appointment_time: new Date(e.target.value).toISOString() })
+                        }
+                      />
+                    ) : (
+                      <span className="text-[13px] text-content truncate block tabular-nums">
+                        {formatDateTime(booking.appointment_time)}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
 
-            <div className="flex justify-end gap-2 mt-1 pt-3 border-t border-[#3DA35D]/20">
-              {editingId === booking.id ? (
-                <>
-                  <button className="flex-1 py-2.5 rounded-xl font-bold text-[#134611] bg-[#96E072] border-none shadow-sm cursor-pointer hover:bg-[#96E072]/80 transition-colors" onClick={() => setEditingId(null)}>Cancel</button>
-                  <button className="flex-1 py-2.5 rounded-xl font-bold text-[#E8FCCF] bg-[#134611] border-none shadow-sm cursor-pointer hover:bg-[#134611]/90 transition-colors" onClick={handleSaveEdit}>Save</button>
-                </>
-              ) : (
-                <>
-                  <button className="flex-1 py-2.5 rounded-xl font-bold text-[#E8FCCF] bg-[#3E8914] border-none shadow-sm cursor-pointer hover:bg-[#3E8914]/90 transition-colors" onClick={() => { setEditingId(booking.id); setEditForm(booking); }}>Edit</button>
-                  {role === 'admin' && (
-                    <button className="flex-1 py-2.5 rounded-xl font-bold text-white bg-red-500/90 border-none shadow-sm cursor-pointer hover:bg-red-600 transition-colors" onClick={() => handleDelete(booking.id)}>Delete</button>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        ))}
+              <div className="flex gap-2 pt-1">
+                {isEditing ? (
+                  <>
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditingId(null)}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" className="flex-1" onClick={handleSaveEdit}>
+                      <Check size={15} aria-hidden="true" /> Save
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => { setEditingId(booking.id); setEditForm(booking); }}
+                    >
+                      <Pencil size={14} aria-hidden="true" /> Edit
+                    </Button>
+                    {role === 'admin' && (
+                      <Button variant="danger" size="sm" className="flex-1" onClick={() => handleDelete(booking.id)}>
+                        <Trash2 size={14} aria-hidden="true" /> Delete
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* --- DESKTOP TABLE VIEW --- */}
-      <div className="hidden lg:block bg-white/50 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_8px_32px_rgba(19,70,17,0.06)] overflow-hidden overflow-x-auto">
-        <table className="w-full border-collapse min-w-[1000px]">
-          <thead className="bg-[#134611] text-[#E8FCCF]">
+      {/* ---------- DESKTOP TABLE ---------- */}
+      <div className="hidden lg:block">
+        <Table
+          minWidth="58rem"
+          columns={['#', 'Customer', 'Contact', 'Service', 'Stylist', 'Appointment', 'Status', 'Actions']}
+        >
+          {currentBookings.length === 0 && (
             <tr>
-              <th className="p-4 text-left font-bold text-sm tracking-wide rounded-tl-2xl">ID</th>
-              <th className="p-4 text-left font-bold text-sm tracking-wide">Customer</th>
-              <th className="p-4 text-left font-bold text-sm tracking-wide">Email</th>
-              <th className="p-4 text-left font-bold text-sm tracking-wide">Phone</th>
-              <th className="p-4 text-left font-bold text-sm tracking-wide">Service</th>
-              <th className="p-4 text-left font-bold text-sm tracking-wide">Stylist</th>
-              <th className="p-4 text-left font-bold text-sm tracking-wide">Appointment Time</th>
-              <th className="p-4 text-left font-bold text-sm tracking-wide">Status</th>
-              <th className="p-4 text-left font-bold text-sm tracking-wide rounded-tr-2xl">Actions</th>
+              <Td colSpan={8} className="py-10">
+                <EmptyState
+                  icon={CalendarSearch}
+                  title="No appointments found"
+                  description="Try a different date or clear the filters."
+                  className="border-none bg-transparent py-0"
+                />
+              </Td>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-[#3DA35D]/20">
-            {currentBookings.length === 0 && (
-              <tr><td colSpan="9" className="p-8 text-center text-[#134611]/60 font-bold">No appointments found.</td></tr>
-            )}
-            {currentBookings.map(booking => (
-              <tr key={booking.id} className="transition-colors duration-200 hover:bg-white/40">
-                <td className="p-4 text-sm text-[#3E8914] font-black align-middle">{booking.id}</td>
-                <td className="p-4 text-sm font-black text-[#134611] align-middle">{booking.customer_name}</td>
-                <td className="p-4 text-sm font-bold text-[#3DA35D] align-middle">{booking.email}</td>
-                <td className="p-4 text-sm font-bold text-[#3DA35D] align-middle">
-                  {editingId === booking.id ? (
-                    <input
+          )}
+          {currentBookings.map((booking) => {
+            const isEditing = editingId === booking.id;
+            return (
+              <Tr key={booking.id}>
+                <Td className="text-content-muted tabular-nums">{booking.id}</Td>
+                <Td className="font-medium max-w-[10rem] truncate">{booking.customer_name}</Td>
+                <Td className="max-w-[12rem]">
+                  <span className="block text-[13px] text-content-secondary truncate">{booking.email}</span>
+                  {isEditing ? (
+                    <Input
+                      aria-label="Phone"
                       type="tel"
-                      className="py-1.5 px-2 border border-[#3DA35D] rounded-lg text-sm bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072] w-28"
+                      className="h-8 mt-1 text-[13px] w-32"
                       value={editForm.phone || ''}
-                      onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
                     />
                   ) : (
-                    booking.phone || '-'
+                    <span className="block text-[13px] text-content-muted tabular-nums">{booking.phone || '—'}</span>
                   )}
-                </td>
-                
-                <td className="p-4 text-sm align-middle">
-                  {editingId === booking.id ? (
-                    <select
-                      className="py-1.5 px-2 border border-[#3DA35D] rounded-lg text-sm bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072] min-w-[130px]"
+                </Td>
+                <Td>
+                  {isEditing ? (
+                    <Select
+                      aria-label="Service"
+                      className="h-9 min-w-[9rem] text-[13px]"
                       value={editForm.service_id}
-                      onChange={e => setEditForm({ ...editForm, service_id: e.target.value })}
+                      onChange={(e) => setEditForm({ ...editForm, service_id: e.target.value })}
                     >
-                      {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
+                      {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </Select>
                   ) : (
-                    <span className="font-bold text-[#134611] bg-[#96E072]/20 rounded-lg inline-block px-3 py-1 border border-[#96E072]/40 whitespace-nowrap">{booking.service}</span>
+                    <Badge tone="primary" plain className="font-medium max-w-[11rem] truncate block">
+                      {booking.service}
+                    </Badge>
                   )}
-                </td>
-
-                <td className="p-4 text-sm font-bold text-[#134611] align-middle">
-                  {editingId === booking.id ? (
-                    <select
-                      className="py-1.5 px-2 border border-[#3DA35D] rounded-lg text-sm bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072]"
+                </Td>
+                <Td>
+                  {isEditing ? (
+                    <Select
+                      aria-label="Stylist"
+                      className="h-9 min-w-[8rem] text-[13px]"
                       value={editForm.staff_id}
-                      onChange={e => setEditForm({ ...editForm, staff_id: e.target.value })}
+                      onChange={(e) => setEditForm({ ...editForm, staff_id: e.target.value })}
                     >
-                      {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
+                      {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </Select>
                   ) : (
-                    <span className="font-bold text-[#3E8914] flex items-center gap-1.5 whitespace-nowrap">
-                       {booking.staff_name || '-'}
-                    </span>
+                    <span className="text-content-secondary whitespace-nowrap">{booking.staff_name || '—'}</span>
                   )}
-                </td>
-
-                <td className="p-4 text-sm text-[#134611] font-bold whitespace-nowrap align-middle">
-                  {editingId === booking.id ? (
-                     <input
+                </Td>
+                <Td className="whitespace-nowrap tabular-nums">
+                  {isEditing ? (
+                    <Input
+                      aria-label="Appointment time"
                       type="datetime-local"
-                      className="py-1.5 px-2 border border-[#3DA35D] rounded-lg text-sm bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072]"
+                      className="h-9 text-[13px]"
                       value={formatForInput(editForm.appointment_time)}
-                      onChange={e => {
+                      onChange={(e) => {
                         const newDate = new Date(e.target.value);
                         if (!isNaN(newDate.getTime())) {
-                           setEditForm({ ...editForm, appointment_time: newDate.toISOString() })
+                          setEditForm({ ...editForm, appointment_time: newDate.toISOString() });
                         }
                       }}
                     />
                   ) : (
-                    <div>{formatDateTime(booking.appointment_time)}</div>
+                    formatDateTime(booking.appointment_time)
                   )}
-                </td>
-
-                <td className="p-4 text-sm align-middle">
-                  {editingId === booking.id ? (
-                    <select
-                      className="py-1.5 px-3 border border-[#3DA35D] rounded-lg text-sm bg-white/90 text-[#134611] font-bold outline-none focus:ring-2 focus:ring-[#96E072]"
+                </Td>
+                <Td>
+                  {isEditing ? (
+                    <Select
+                      aria-label="Status"
+                      className="h-9 min-w-[8.5rem] text-[13px]"
                       value={editForm.status}
-                      onChange={e => setEditForm({ ...editForm, status: e.target.value })}
+                      onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
                     >
-                      <option value="queued">Queued</option>
-                      <option value="in-progress">In Progress</option>
-                      <option value="completed">Completed</option>
-                      <option value="cancelled">Cancelled</option>
-                    </select>
+                      {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </Select>
                   ) : (
-                    <span className={`py-1.5 px-3 rounded-lg font-black text-[11px] uppercase whitespace-nowrap ${badgeColors[booking.status]}`}>{booking.status}</span>
+                    <StatusBadge status={booking.status} />
                   )}
-                </td>
-                <td className="p-4 text-sm align-middle">
-                  {editingId === booking.id ? (
-                    <div className="flex gap-2">
-                      <button className="py-2 px-4 rounded-xl font-bold text-[#E8FCCF] bg-[#134611] hover:shadow-lg transition-all border-none cursor-pointer" onClick={handleSaveEdit}>Save</button>
-                      <button className="py-2 px-4 rounded-xl font-bold text-[#134611] bg-[#96E072] hover:shadow-lg transition-all border-none cursor-pointer" onClick={() => setEditingId(null)}>Cancel</button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button className="py-2 px-4 rounded-xl font-bold text-[#E8FCCF] bg-[#3E8914] hover:bg-[#3DA35D] transition-colors border-none cursor-pointer" onClick={() => { setEditingId(booking.id); setEditForm(booking); }}>Edit</button>
-                      {role === 'admin' && (
-                        <button className="py-2 px-4 rounded-xl font-bold text-white bg-red-500/90 hover:bg-red-600 transition-colors border-none cursor-pointer" onClick={() => handleDelete(booking.id)}>Delete</button>
-                      )}
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </Td>
+                <Td>
+                  <div className="flex gap-1.5">
+                    {isEditing ? (
+                      <>
+                        <IconButton label="Save changes" variant="primary" size="sm" onClick={handleSaveEdit}>
+                          <Check size={15} />
+                        </IconButton>
+                        <IconButton label="Cancel editing" variant="outline" size="sm" onClick={() => setEditingId(null)}>
+                          <X size={15} />
+                        </IconButton>
+                      </>
+                    ) : (
+                      <>
+                        <IconButton
+                          label={`Edit booking ${booking.id}`}
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => { setEditingId(booking.id); setEditForm(booking); }}
+                        >
+                          <Pencil size={14} />
+                        </IconButton>
+                        {role === 'admin' && (
+                          <IconButton
+                            label={`Delete booking ${booking.id}`}
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleDelete(booking.id)}
+                          >
+                            <Trash2 size={14} />
+                          </IconButton>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </Td>
+              </Tr>
+            );
+          })}
+        </Table>
       </div>
 
-      {/* --- PAGINATION --- */}
-      {bookings.length > itemsPerPage && (
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-3 mt-6 bg-white/50 backdrop-blur-xl border border-white/60 p-4 rounded-2xl shadow-[0_4px_20px_rgba(19,70,17,0.05)]">
-          <button
-            disabled={safePage === 1}
-            onClick={() => setCurrentPage(prev => prev - 1)}
-            className="w-full sm:w-auto py-2.5 px-5 rounded-xl font-bold text-sm bg-white/80 text-[#134611] border border-[#3DA35D]/30 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#96E072]/20 transition-colors cursor-pointer"
-          >
-            ← Previous
-          </button>
-          <span className="text-sm font-black text-[#3E8914] bg-white/80 py-2.5 px-5 rounded-xl border border-[#3DA35D]/30 w-full sm:w-auto text-center shadow-sm">
-            Page {safePage} of {totalPages}
-          </span>
-          <button
-            disabled={safePage === totalPages}
-            onClick={() => setCurrentPage(prev => prev + 1)}
-            className="w-full sm:w-auto py-2.5 px-5 rounded-xl font-bold text-sm bg-white/80 text-[#134611] border border-[#3DA35D]/30 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#96E072]/20 transition-colors cursor-pointer"
-          >
-            Next →
-          </button>
-        </div>
-      )}
+      <Pagination
+        page={safePage}
+        totalPages={totalPages}
+        onPrev={() => setCurrentPage((p) => p - 1)}
+        onNext={() => setCurrentPage((p) => p + 1)}
+      />
+
+      {/* ---------- WALK-IN MODAL ---------- */}
+      <Modal
+        open={showAddForm}
+        onOpenChange={(next) => (next ? setShowAddForm(true) : resetAddForm())}
+        title="New appointment"
+        description="Block the schedule for a walk-in or phone booking."
+        footer={
+          <>
+            <Button variant="outline" onClick={resetAddForm}>Cancel</Button>
+            <Button type="submit" form="walkin-form">Save appointment</Button>
+          </>
+        }
+      >
+        <form id="walkin-form" onSubmit={handleAddSubmit} className="flex flex-col gap-6">
+          <fieldset className="border-none p-0 m-0 min-w-0">
+            <legend className="text-[11px] font-semibold uppercase tracking-[0.08em] text-content-secondary mb-3 p-0">
+              Client details
+            </legend>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Field label="Customer name" htmlFor="wi-name" required>
+                <Input
+                  id="wi-name" type="text" required placeholder="e.g. Jane Doe"
+                  value={addForm.customer_name}
+                  onChange={(e) => setAddForm({ ...addForm, customer_name: e.target.value })}
+                />
+              </Field>
+              <Field label="Phone" htmlFor="wi-phone" required>
+                <Input
+                  id="wi-phone" type="tel" required placeholder="10-digit mobile"
+                  value={addForm.phone}
+                  onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
+                />
+              </Field>
+              <Field label="Email" htmlFor="wi-email" hint="Optional — for the e-receipt">
+                <Input
+                  id="wi-email" type="email" placeholder="you@example.com"
+                  value={addForm.email}
+                  onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
+                />
+              </Field>
+            </div>
+
+            {customerData && (
+              <div className="mt-4 rounded-[var(--radius-md)] border border-primary/20 bg-primary-soft p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-slideIn">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="grid place-items-center h-9 w-9 shrink-0 rounded-full bg-primary/15 text-primary border border-primary/25">
+                    <Coins size={16} aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
+                      Loyalty wallet
+                    </p>
+                    <p className="m-0 mt-0.5 text-sm text-content tabular-nums">
+                      {walletCoins.toLocaleString()} coins
+                    </p>
+                  </div>
+                </div>
+
+                {walletCoins >= 1000 ? (
+                  servicePrice >= 1000 ? (
+                    <Checkbox
+                      id="wi-redeem"
+                      checked={redeemCoins}
+                      onChange={(e) => setRedeemCoins(e.target.checked)}
+                      label="Redeem 1000 coins"
+                      description="₹1,000 off this booking"
+                    />
+                  ) : (
+                    <p className="m-0 text-[12px] text-content-secondary sm:text-right">
+                      Service must be ₹1,000+ to redeem coins.
+                    </p>
+                  )
+                ) : (
+                  <p className="m-0 text-[12px] text-content-muted sm:text-right tabular-nums">
+                    {(1000 - walletCoins).toLocaleString()} more coins for a discount.
+                  </p>
+                )}
+              </div>
+            )}
+          </fieldset>
+
+          <fieldset className="border-none p-0 m-0 min-w-0">
+            <legend className="text-[11px] font-semibold uppercase tracking-[0.08em] text-content-secondary mb-3 p-0">
+              Service & schedule
+            </legend>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <Field label="Service" htmlFor="wi-service" required>
+                <Select
+                  id="wi-service" required value={addForm.service_id}
+                  onChange={(e) => setAddForm({ ...addForm, service_id: e.target.value })}
+                >
+                  <option value="" disabled>Select service</option>
+                  {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Stylist" htmlFor="wi-staff" required>
+                <Select
+                  id="wi-staff" required value={addForm.staff_id}
+                  onChange={(e) => setAddForm({ ...addForm, staff_id: e.target.value })}
+                >
+                  <option value="" disabled>Select stylist</option>
+                  {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Date" htmlFor="wi-date" required>
+                <Input
+                  id="wi-date" type="date" required
+                  min={new Date().toISOString().split('T')[0]}
+                  value={addForm.date}
+                  onChange={(e) => setAddForm({ ...addForm, date: e.target.value })}
+                />
+              </Field>
+              <Field label="Time" htmlFor="wi-time" required>
+                <Select
+                  id="wi-time" required value={addForm.time}
+                  onChange={(e) => setAddForm({ ...addForm, time: e.target.value })}
+                >
+                  <option value="" disabled>Select time</option>
+                  {Array.from({ length: 23 }).map((_, i) => {
+                    const hour = Math.floor(i / 2) + 9;
+                    const mins = i % 2 === 0 ? '00' : '30';
+                    const timeString = `${hour.toString().padStart(2, '0')}:${mins}`;
+                    const ampm = hour >= 12 ? 'PM' : 'AM';
+                    const displayHour = hour > 12 ? hour - 12 : hour;
+                    return (
+                      <option key={timeString} value={timeString}>
+                        {`${displayHour}:${mins} ${ampm}`}
+                      </option>
+                    );
+                  })}
+                </Select>
+              </Field>
+            </div>
+          </fieldset>
+        </form>
+      </Modal>
     </div>
   );
 }

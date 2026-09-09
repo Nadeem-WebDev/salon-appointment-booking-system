@@ -1,0 +1,194 @@
+/* ==========================================================================
+   DESIGN TOKENS — the single place the visual identity is defined.
+   ==========================================================================
+   To re-theme the whole application, change the values in the [data-theme]
+   blocks below. Nothing else needs editing: every component consumes these
+   through Tailwind utilities (bg-surface, text-secondary, border-subtle, ...)
+   which are wired up in the `@theme inline` block at the bottom.
+   Charts read the same values at runtime via theme/chartTheme.js.
+   ========================================================================== */
+
+/* --- LUXURY DARK (default) ---------------------------------------------- */
+:root,
+[data-theme='luxury-dark'] {
+  color-scheme: dark;
+
+  /* Background — deep, warm, never pure black */
+  --bg: #0c0b0f;
+  --bg-secondary: #121016;
+  --surface: #17151d;
+  --surface-elevated: #1f1c27;
+  --surface-sunken: #100e14;
+
+  /* Glass */
+  --glass-bg: rgba(31, 28, 39, 0.55);
+  --glass-bg-strong: rgba(31, 28, 39, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.06);
+  --glass-blur: 18px;
+
+  /* Brand — champagne */
+  --primary: #c9a96a;
+  --primary-hover: #dcc088;
+  --primary-active: #b8965a;
+  --primary-soft: rgba(201, 169, 106, 0.12);
+  --primary-contrast: #17130a;
+
+  /* Accent — muted rose/bronze */
+  --accent: #a8808f;
+  --accent-soft: rgba(168, 128, 143, 0.14);
+
+  /* Text */
+  --text-primary: #f4f2ee;
+  --text-secondary: #a9a49e;
+  --text-muted: #6e6a66;
+  --text-inverse: #17130a;
+
+  /* Status */
+  --success: #5cbf8a;
+  --success-soft: rgba(92, 191, 138, 0.14);
+  --warning: #e0b155;
+  --warning-soft: rgba(224, 177, 85, 0.14);
+  --danger: #e5705f;
+  --danger-soft: rgba(229, 112, 95, 0.14);
+  --info: #7aa7d9;
+  --info-soft: rgba(122, 167, 217, 0.14);
+
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.11);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 24px 56px -16px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 0 1px var(--primary-soft), 0 8px 32px -8px rgba(201, 169, 106, 0.28);
+
+  /* Decorative background wash */
+  --wash-one: rgba(201, 169, 106, 0.10);
+  --wash-two: rgba(168, 128, 143, 0.09);
+}
+
+/* --- LIGHT (architectural readiness; not exposed in the UI yet) ---------- */
+[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #f7f5f2;
+  --bg-secondary: #f1eee9;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-sunken: #ece8e2;
+
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-bg-strong: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(23, 19, 10, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.8);
+  --glass-blur: 16px;
+
+  --primary: #9c7b34;
+  --primary-hover: #866929;
+  --primary-active: #6f5721;
+  --primary-soft: rgba(156, 123, 52, 0.10);
+  --primary-contrast: #ffffff;
+
+  --accent: #8a5f70;
+  --accent-soft: rgba(138, 95, 112, 0.10);
+
+  --text-primary: #1b1720;
+  --text-secondary: #5c554f;
+  --text-muted: #8c847d;
+  --text-inverse: #ffffff;
+
+  --success: #1f7a4d;
+  --success-soft: rgba(31, 122, 77, 0.10);
+  --warning: #9a6c14;
+  --warning-soft: rgba(154, 108, 20, 0.10);
+  --danger: #b23b2b;
+  --danger-soft: rgba(178, 59, 43, 0.10);
+  --info: #2f6ea8;
+  --info-soft: rgba(47, 110, 168, 0.10);
+
+  --border-subtle: rgba(23, 19, 10, 0.07);
+  --border-default: rgba(23, 19, 10, 0.13);
+  --border-strong: rgba(23, 19, 10, 0.22);
+
+  --shadow-sm: 0 1px 2px rgba(23, 19, 10, 0.06);
+  --shadow-md: 0 8px 24px -8px rgba(23, 19, 10, 0.14);
+  --shadow-lg: 0 24px 56px -16px rgba(23, 19, 10, 0.18);
+  --shadow-glow: 0 0 0 1px var(--primary-soft), 0 8px 32px -8px rgba(156, 123, 52, 0.22);
+
+  --wash-one: rgba(156, 123, 52, 0.10);
+  --wash-two: rgba(138, 95, 112, 0.08);
+}
+
+/* --- Scale tokens (theme-independent) ----------------------------------- */
+:root {
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.375rem;
+
+  --font-display: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==========================================================================
+   Tailwind wiring. `inline` makes the utilities emit var(--x) rather than
+   baking the value in at build time, which is what lets [data-theme] swap
+   the whole palette at runtime.
+   ========================================================================== */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-sunken: var(--surface-sunken);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-contrast: var(--primary-contrast);
+
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-content: var(--text-primary);
+  --color-content-secondary: var(--text-secondary);
+  --color-content-muted: var(--text-muted);
+  --color-content-inverse: var(--text-inverse);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+
+  --color-subtle: var(--border-subtle);
+  --color-line: var(--border-default);
+  --color-strong: var(--border-strong);
+
+  --color-glass: var(--glass-bg);
+  --color-glass-strong: var(--glass-bg-strong);
+  --color-glass-line: var(--glass-border);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-glow: var(--shadow-glow);
+
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+}

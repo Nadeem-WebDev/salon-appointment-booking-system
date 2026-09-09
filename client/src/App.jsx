@@ -1,32 +1,48 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { CalendarClock, Users, ShieldCheck, Home, Sparkles } from 'lucide-react';
+
 import BookingForm from './components/BookingForm.jsx';
 import QueueView from './components/QueueView.jsx';
 import AdminPanel from './components/admin/AdminPanel.jsx';
+import { Button, GlassCard, SectionHeader } from './components/ui/index.js';
 import logo from './assets/logo.svg';
-// NEW: Imported 'Home' icon for the 404 page
-import { CalendarClock, Users, ShieldCheck, Home } from 'lucide-react'; 
 
-// --- NEW: 404 Error Page Component ---
+function Brand({ size = 'md' }) {
+  const box = size === 'sm' ? 'h-9 w-9' : 'h-11 w-11';
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      <div
+        className={`${box} grid place-items-center shrink-0 rounded-[var(--radius-md)] bg-primary-soft border border-primary/25 p-2`}
+      >
+        <img src={logo} alt="" className="h-full w-full object-contain opacity-90" aria-hidden="true" />
+      </div>
+      <div className="min-w-0">
+        <p className="font-display text-lg leading-none text-content m-0 truncate">SalonBooker</p>
+        <p className="text-[10px] uppercase tracking-[0.22em] text-primary m-0 mt-1">Studio</p>
+      </div>
+    </div>
+  );
+}
+
 function NotFound() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center text-center px-4 relative z-10 overflow-hidden">
-       {/* Ambient Glow */}
-       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-[#96E072]/40 blur-[100px] rounded-full pointer-events-none -z-10"></div>
-       
-       <h1 className="text-[120px] leading-none font-black text-[#134611] mb-2 tracking-tighter">404</h1>
-       <h2 className="text-2xl md:text-3xl font-black text-[#3E8914] mb-4">Looks like you're lost!</h2>
-       <p className="text-[#3DA35D] font-bold mb-8 max-w-md">
-         The page you are looking for doesn't exist, has been moved, or is currently unavailable.
-       </p>
-       
-       <Link 
-         to="/" 
-         className="flex items-center gap-2 bg-[#134611] text-[#E8FCCF] py-3.5 px-6 rounded-xl font-bold hover:bg-[#3E8914] transition-all hover:shadow-[0_8px_20px_rgba(19,70,17,0.2)] hover:-translate-y-0.5 no-underline"
-       >
-         <Home size={20} /> Take Me Home
-       </Link>
-    </div>
+    <main className="relative min-h-screen grid place-items-center px-6 text-center">
+      <div>
+        <p className="font-display text-[7rem] md:text-[9rem] leading-none text-primary/25 m-0 select-none">
+          404
+        </p>
+        <h1 className="font-display text-3xl md:text-4xl text-content m-0 -mt-4">
+          This page has stepped out
+        </h1>
+        <p className="text-content-secondary mt-4 mb-8 max-w-md mx-auto text-[15px]">
+          The page you're looking for doesn't exist, has moved, or is temporarily unavailable.
+        </p>
+        <Button as={Link} to="/" size="lg">
+          <Home size={18} aria-hidden="true" /> Back to home
+        </Button>
+      </div>
+    </main>
   );
 }
 
@@ -35,74 +51,75 @@ function CustomerView({ apiBase }) {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 bg-[#134611]/85 backdrop-blur-lg border-b border-[#3DA35D]/40 shadow-lg">
-        <div className="max-w-350 mx-auto py-3 px-4 md:px-8 flex flex-wrap justify-between items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-white/10 rounded-xl flex items-center justify-center p-2 border border-[#96E072]/30 backdrop-blur-sm">
-              <img src={logo} alt="Salon Logo" className="w-full h-full object-contain filter invert" />
-            </div>
-            <h1 className="text-xl md:text-2xl font-black text-[#E8FCCF] m-0 tracking-tight">
-              SalonBooker
-            </h1>
-          </div>
-          <Link 
-            to="/admin"
-            className="flex items-center gap-2 bg-[#3E8914] text-[#E8FCCF] border border-[#96E072]/50 py-2 px-4 md:py-2.5 md:px-5 rounded-lg md:rounded-xl font-semibold transition-all duration-300 text-sm hover:bg-[#3DA35D] hover:text-[#134611] hover:shadow-lg hover:-translate-y-0.5 no-underline"
-           >
-            <ShieldCheck size={18} />
-            <span className="hidden sm:inline">Admin Access</span>
-          </Link>
+      <header className="sticky top-0 z-50 glass glass-edge border-x-0 border-t-0 rounded-none">
+        <div className="mx-auto max-w-[85rem] px-4 md:px-8 h-[4.5rem] flex items-center justify-between gap-4">
+          <Brand />
+          <Button as={Link} to="/admin" variant="secondary" size="sm">
+            <ShieldCheck size={16} aria-hidden="true" />
+            <span className="hidden sm:inline">Admin</span>
+          </Button>
         </div>
-      </nav>
+      </header>
 
-      <main className="py-12 px-4 md:px-8 max-w-350 mx-auto relative">
-        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[60%] h-100 bg-[#96E072]/40 blur-[120px] rounded-full pointer-events-none -z-10"></div>
-        
-        <section className="text-center mb-12 max-w-2xl mx-auto">
-          <h2 className="text-3xl md:text-5xl font-black mb-4 text-[#134611] tracking-tight">
-            Your perfect style,<br/>
-            <span className="text-[#3E8914]">just an appointment away.</span>
-          </h2>
-          <p className="text-base md:text-lg text-[#3DA35D] font-bold">Book your slot instantly and track your position in the live queue.</p>
+      <main className="mx-auto max-w-[85rem] px-4 md:px-8 py-12 md:py-16">
+        <section className="text-center max-w-2xl mx-auto mb-12 md:mb-16">
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary-soft border border-primary/20 text-primary text-[11px] font-semibold uppercase tracking-[0.14em]">
+            <Sparkles size={13} aria-hidden="true" /> Now booking
+          </span>
+          <h1 className="font-display text-4xl md:text-[3.25rem] leading-[1.08] text-content mt-6 mb-0">
+            Your perfect style,
+            <br />
+            <span className="text-primary">just an appointment away.</span>
+          </h1>
+          <p className="text-content-secondary text-base md:text-lg mt-5 mb-0">
+            Reserve your slot in seconds and follow your place in the live queue.
+          </p>
         </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-10 items-start">
-          <div className="bg-white/40 backdrop-blur-xl border border-white/60 p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-[0_8px_30px_rgba(19,70,17,0.06)]">
-            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-[#3DA35D]/20">
-              <div className="p-2.5 bg-[#134611] text-[#E8FCCF] rounded-xl shadow-inner">
-                <CalendarClock size={24} strokeWidth={2.5} />
-              </div>
-              <h3 className="text-[#134611] text-xl font-bold m-0">Book Appointment</h3>
-            </div>
-            <BookingForm apiBase={apiBase} onBooked={() => setQueueRefreshKey(prev => prev + 1)} />
-          </div>
-          
-          <div className="bg-white/40 backdrop-blur-xl border border-white/60 p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-[0_8px_30px_rgba(19,70,17,0.06)]">
-            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-[#3DA35D]/20">
-              <div className="p-2.5 bg-[#134611] text-[#E8FCCF] rounded-xl shadow-inner">
-                <Users size={24} strokeWidth={2.5} />
-              </div>
-              <h3 className="text-[#134611] text-xl font-bold m-0">Live Queue Status</h3>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6 lg:gap-8 items-start">
+          <GlassCard className="p-6 md:p-8">
+            <SectionHeader
+              icon={CalendarClock}
+              title="Book an appointment"
+              description="Choose your service, stylist and time."
+            />
+            <BookingForm apiBase={apiBase} onBooked={() => setQueueRefreshKey((k) => k + 1)} />
+          </GlassCard>
+
+          <GlassCard className="p-6 md:p-8 lg:sticky lg:top-24">
+            <SectionHeader
+              icon={Users}
+              title="Live queue"
+              description="Updates automatically every 10 seconds."
+            />
             <QueueView apiBase={apiBase} refreshKey={queueRefreshKey} />
-          </div>
+          </GlassCard>
         </div>
       </main>
+
+      <footer className="border-t border-subtle mt-8">
+        <div className="mx-auto max-w-[85rem] px-4 md:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <Brand size="sm" />
+          <p className="text-[13px] text-content-muted m-0">
+            Shashtri Nager, Mumbai · © {new Date().getFullYear()} SalonBooker Studio
+          </p>
+        </div>
+      </footer>
     </>
   );
 }
 
 export default function App() {
-  const API_BASE = import.meta.env.MODE === "development" ? import.meta.env.VITE_API_BASE : "/api";
+  const API_BASE =
+    import.meta.env.MODE === 'development' ? import.meta.env.VITE_API_BASE : '/api';
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-[#E8FCCF] font-sans text-[#134611] selection:bg-[#96E072] selection:text-[#134611]">
+      <div className="app-wash" aria-hidden="true" />
+      <div className="min-h-screen text-content">
         <Routes>
           <Route path="/" element={<CustomerView apiBase={API_BASE} />} />
           <Route path="/admin/*" element={<AdminPanel apiBase={API_BASE} />} />
-          
-          {/* NEW: The Catch-All Route. If nothing above matches, show the 404 page! */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>

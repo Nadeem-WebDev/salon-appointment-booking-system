@@ -1,112 +1,147 @@
-import React from 'react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+import React, { useMemo } from 'react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
+  ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts';
+import { CalendarCheck, CheckCircle2, IndianRupee, XCircle, PieChart as PieIcon, BarChart3 } from 'lucide-react';
 
-// Fresh Green Palette for Charts
-const COLORS = ['#134611', '#3E8914', '#3DA35D', '#96E072', '#E8FCCF'];
+import { GlassCard, SectionHeader, StatCard, EmptyState } from '../ui/index.js';
+import { getCategoricalPalette, getChartTheme, getStatusColor, tooltipStyles } from '../../theme/chartTheme.js';
 
 export default function AnalyticsDashboard({ bookings }) {
+  const chart = getChartTheme();
+  const palette = getCategoricalPalette();
+  const tip = tooltipStyles();
+
   const totalAppointments = bookings.length;
-  const completedAppointments = bookings.filter(b => b.status === 'completed').length;
-  const cancelledAppointments = bookings.filter(b => b.status === 'cancelled').length;
-  
-  // Dynamically calculate revenue using the price from the PostgreSQL JOIN
+  const completedAppointments = bookings.filter((b) => b.status === 'completed').length;
+  const cancelledAppointments = bookings.filter((b) => b.status === 'cancelled').length;
+
   const estimatedRevenue = bookings.reduce((sum, b) => {
-    if (b.status !== 'cancelled') {
-      return sum + Number(b.service_price || 0);
-    }
+    if (b.status !== 'cancelled') return sum + Number(b.service_price || 0);
     return sum;
   }, 0);
 
-  const serviceCounts = bookings.reduce((acc, b) => {
-    acc[b.service] = (acc[b.service] || 0) + 1;
-    return acc;
-  }, {});
-  const serviceData = Object.keys(serviceCounts).map(key => ({ name: key, value: serviceCounts[key] }));
+  const serviceData = useMemo(() => {
+    const counts = bookings.reduce((acc, b) => {
+      acc[b.service] = (acc[b.service] || 0) + 1;
+      return acc;
+    }, {});
+    return Object.keys(counts).map((key) => ({ name: key, value: counts[key] }));
+  }, [bookings]);
 
   const statusData = [
-    { name: 'Queued', count: bookings.filter(b => b.status === 'queued').length },
-    { name: 'In Progress', count: bookings.filter(b => b.status === 'in-progress').length },
-    { name: 'Completed', count: completedAppointments },
-    { name: 'Cancelled', count: cancelledAppointments },
+    { name: 'Queued', key: 'queued', count: bookings.filter((b) => b.status === 'queued').length },
+    { name: 'In progress', key: 'in-progress', count: bookings.filter((b) => b.status === 'in-progress').length },
+    { name: 'Completed', key: 'completed', count: completedAppointments },
+    { name: 'Cancelled', key: 'cancelled', count: cancelledAppointments },
   ];
 
+  const completionRate =
+    totalAppointments > 0 ? Math.round((completedAppointments / totalAppointments) * 100) : 0;
+
+  const axisTick = { fontSize: 11, fill: chart.text };
+
   return (
-    <div className="animate-slideIn">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white/60 backdrop-blur-md p-5 rounded-2xl shadow-lg border border-[#3DA35D]/30 border-l-[6px] border-l-[#134611] transition-transform hover:-translate-y-1">
-          <h4 className="text-[#3DA35D] text-sm font-bold uppercase m-0 truncate">Total Bookings</h4>
-          <p className="text-3xl font-black text-[#134611] mt-2 mb-0 truncate">{totalAppointments}</p>
-        </div>
-        <div className="bg-white/60 backdrop-blur-md p-5 rounded-2xl shadow-lg border border-[#3DA35D]/30 border-l-[6px] border-l-[#3E8914] transition-transform hover:-translate-y-1">
-          <h4 className="text-[#3DA35D] text-sm font-bold uppercase m-0 truncate">Completed</h4>
-          <p className="text-3xl font-black text-[#134611] mt-2 mb-0 truncate">{completedAppointments}</p>
-        </div>
-        <div className="bg-white/60 backdrop-blur-md p-5 rounded-2xl shadow-lg border border-[#3DA35D]/30 border-l-[6px] border-l-[#96E072] transition-transform hover:-translate-y-1">
-          <h4 className="text-[#3DA35D] text-sm font-bold uppercase m-0 truncate">Est. Revenue</h4>
-          <p className="text-3xl font-black text-[#134611] mt-2 mb-0 truncate">₹{estimatedRevenue.toLocaleString()}</p>
-        </div>
-        <div className="bg-white/60 backdrop-blur-md p-5 rounded-2xl shadow-lg border border-[#3DA35D]/30 border-l-[6px] border-l-[#ef4444] transition-transform hover:-translate-y-1">
-          <h4 className="text-[#3DA35D] text-sm font-bold uppercase m-0 truncate">Cancelled</h4>
-          <p className="text-3xl font-black text-[#134611] mt-2 mb-0 truncate">{cancelledAppointments}</p>
-        </div>
+    <div className="animate-slideIn flex flex-col gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          icon={CalendarCheck}
+          label="Total bookings"
+          value={totalAppointments}
+          tone="primary"
+          trend="For the selected date"
+        />
+        <StatCard
+          icon={CheckCircle2}
+          label="Completed"
+          value={completedAppointments}
+          tone="success"
+          trend={`${completionRate}% completion rate`}
+        />
+        <StatCard
+          icon={IndianRupee}
+          label="Est. revenue"
+          value={`₹${estimatedRevenue.toLocaleString('en-IN')}`}
+          tone="accent"
+          trend="Excludes cancelled bookings"
+        />
+        <StatCard
+          icon={XCircle}
+          label="Cancelled"
+          value={cancelledAppointments}
+          tone="danger"
+          trend={cancelledAppointments === 0 ? 'None today' : 'Review if trending up'}
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white/60 backdrop-blur-md p-4 md:p-6 rounded-2xl shadow-lg border border-[#3DA35D]/30 min-w-0 overflow-hidden w-full">
-          <h3 className="text-lg font-black text-[#134611] mb-4 m-0 truncate">Service Popularity</h3>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <GlassCard className="p-5 md:p-6 min-w-0">
+          <SectionHeader icon={PieIcon} title="Service popularity" description="Share of bookings by service" />
           {serviceData.length > 0 ? (
-            <div className="h-[300px] w-full">
+            <div className="h-[19rem] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={serviceData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value" stroke="none">
+                  <Pie
+                    data={serviceData}
+                    cx="50%"
+                    cy="45%"
+                    innerRadius={62}
+                    outerRadius={98}
+                    paddingAngle={3}
+                    dataKey="value"
+                    stroke="none"
+                  >
                     {serviceData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      <Cell key={entry.name} fill={palette[index % palette.length]} />
                     ))}
                   </Pie>
-                  <RechartsTooltip formatter={(value) => [`${value} bookings`, 'Count']} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(19,70,17,0.1)' }} />
-                  <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontWeight: 'bold', color: '#134611' }}/>
+                  <RechartsTooltip
+                    formatter={(value) => [`${value} bookings`, 'Count']}
+                    {...tip}
+                  />
+                  <Legend
+                    verticalAlign="bottom"
+                    height={32}
+                    iconType="circle"
+                    iconSize={8}
+                    wrapperStyle={{ fontSize: 12, color: chart.text }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-[300px] flex items-center justify-center text-[#3DA35D] font-bold">No data for selected date</div>
+            <EmptyState title="No data for this date" description="Pick another date to see service mix." />
           )}
-        </div>
+        </GlassCard>
 
-        <div className="bg-white/60 backdrop-blur-md p-4 md:p-6 rounded-2xl shadow-lg border border-[#3DA35D]/30 min-w-0 overflow-hidden w-full">
-          <h3 className="text-lg font-black text-[#134611] mb-4 m-0 truncate">Appointment Status Flow</h3>
-          <div className="h-[300px] w-full">
+        <GlassCard className="p-5 md:p-6 min-w-0">
+          <SectionHeader icon={BarChart3} title="Appointment status" description="Where today's bookings stand" />
+          <div className="h-[19rem] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={statusData} margin={{ top: 20, right: 10, left: -20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3DA35D" strokeOpacity={0.3} />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  interval={0} 
-                  angle={-35} 
-                  textAnchor="end" 
-                  tick={{ fontSize: 12, fill: '#3E8914', fontWeight: 'bold' }}
-                  height={50}
+              <BarChart data={statusData} margin={{ top: 12, right: 8, left: -18, bottom: 28 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chart.grid} />
+                <XAxis
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
+                  interval={0}
+                  angle={-28}
+                  textAnchor="end"
+                  tick={axisTick}
+                  height={46}
                 />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#3E8914', fontWeight: 'bold' }} />
-                <RechartsTooltip cursor={{fill: 'rgba(150, 224, 114, 0.1)'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(19,70,17,0.1)' }} />
-                <Bar dataKey="count" radius={[6, 6, 0, 0]} barSize={45}>
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={
-                      entry.name === 'Queued' ? '#96E072' :
-                      entry.name === 'In Progress' ? '#3DA35D' :
-                      entry.name === 'Completed' ? '#3E8914' : '#ef4444'
-                    } />
+                <YAxis axisLine={false} tickLine={false} tick={axisTick} allowDecimals={false} />
+                <RechartsTooltip cursor={{ fill: chart.grid }} {...tip} />
+                <Bar dataKey="count" name="Bookings" radius={[6, 6, 0, 0]} barSize={42}>
+                  {statusData.map((entry) => (
+                    <Cell key={entry.key} fill={getStatusColor(entry.key)} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </GlassCard>
       </div>
     </div>
   );

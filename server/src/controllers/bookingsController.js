@@ -1,6 +1,8 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import PDFDocument from 'pdfkit';
+import { renderInvoice } from '../theme/invoicePdf.js';
+import { emailLayout, detailPanel, rewardBanner, codeBlock } from '../theme/emailTheme.js';
 
 import { pool } from '../config/db.js';
 
@@ -83,17 +85,14 @@ export const requestOtp = async (req, res) => {
         sender: { name: "Salon Booking System", email: process.env.EMAIL_USER },
         to: [{ email: email, name: customer_name }],
         subject: 'Salon Booking OTP Verification',
-        htmlContent: `
-          <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-            <h2 style="color: #3E8914; text-align: center;">Verify your appointment</h2>
-            <p>Hi <strong>${customer_name}</strong>,</p>
-            <p>Your OTP for booking your <strong>${serviceName}</strong> appointment at <b>${new Date(appointment_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b> is:</p>
-            <div style="background: #E8FCCF; padding: 15px; text-align: center; border-radius: 5px; margin: 20px 0;">
-              <strong style="font-size: 32px; letter-spacing: 5px; color: #134611;">${otp}</strong>
-            </div>
-            <p style="color: #888; font-size: 12px; text-align: center;">This code will expire in 10 minutes.</p>
-          </div>
-        `
+        htmlContent: emailLayout({
+          title: 'Verify your appointment',
+          intro: `<p style="margin:0 0 10px;">Hi <strong>${customer_name}</strong>,</p>
+                  <p style="margin:0;">Your verification code for the <strong>${serviceName}</strong> appointment at
+                  <strong>${new Date(appointment_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong> is:</p>`,
+          body: codeBlock(otp),
+          footerNote: 'This code expires in 10 minutes.'
+        })
       })
     });
 
@@ -507,7 +506,7 @@ export const verifyPaymentAndBook = async (req, res) => {
     
     // Add discount HTML row if coins were used
     const discountHtmlRow = coinsToDeduct > 0 
-      ? `<tr><td style="padding: 5px 0;">Supercoin Discount:</td><td style="text-align: right; color: #3E8914;"><strong>- ₹${coinsToDeduct}</strong></td></tr>` 
+      ? `<tr><td style="padding:6px 0;color:#5c554f;">Supercoin discount</td><td style="padding:6px 0;text-align:right;color:#9c7b34;font-weight:600;">- &#8377;${coinsToDeduct}</td></tr>` 
       : '';
 
     const formattedDate = new Date(appointment_time).toLocaleString('en-IN', {
@@ -526,31 +525,23 @@ export const verifyPaymentAndBook = async (req, res) => {
         sender: { name: "SalonBooker", email: process.env.EMAIL_USER },
         to: [{ email: email, name: customer_name }],
         subject: `Booking Confirmed! - ${service_name} on ${formattedDate}`,
-        htmlContent: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
-            <div style="background-color: #134611; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-              <h1 style="color: #E8FCCF; margin: 0; font-size: 24px;">Booking Confirmed!</h1>
-            </div>
-            <div style="padding: 20px; color: #134611;">
-              <p style="font-size: 16px;">Hi <strong>${customer_name}</strong>,</p>
-              <p>Thank you for choosing us! Your appointment has been successfully scheduled.</p>
-              
-              <div style="background-color: #f4fbf0; border-left: 4px solid #3E8914; padding: 15px; margin: 20px 0; border-radius: 4px;">
-                <p style="margin: 5px 0;"><strong>Service:</strong> ${service_name}</p>
-                <p style="margin: 5px 0;"><strong>Stylist:</strong> ${staff_name}</p>
-                <p style="margin: 5px 0;"><strong>Date & Time:</strong> ${formattedDate}</p>
-              </div>
-
-              <h3 style="border-bottom: 1px solid #ddd; padding-bottom: 8px; color: #134611;">Payment Summary</h3>
-              <table style="width: 100%; text-align: left; font-size: 14px;">
-                <tr><td style="padding: 5px 0;">Total Service Price:</td><td style="text-align: right;"><strong>₹${full_price}</strong></td></tr>
-                ${discountHtmlRow}
-                <tr><td style="padding: 5px 0;">${paymentLabel}</td><td style="text-align: right; color: #3E8914;"><strong>- ₹${amount_paid}</strong></td></tr>
-                <tr style="border-top: 1px solid #eee;"><td style="padding: 10px 0; font-size: 16px;"><strong>Remaining Due at Salon:</strong></td><td style="text-align: right; font-size: 16px; color: #134611;"><strong>₹${remainingAmount}</strong></td></tr>
-              </table>
-            </div>
-          </div>
-        `
+        htmlContent: emailLayout({
+          title: 'Booking confirmed',
+          intro: `<p style="margin:0 0 10px;">Hi <strong>${customer_name}</strong>,</p>
+                  <p style="margin:0;">Your appointment is scheduled. We look forward to seeing you.</p>`,
+          body: detailPanel([
+            ['Service', service_name],
+            ['Stylist', staff_name],
+            ['Date &amp; time', formattedDate],
+          ]) + `
+            <h3 style="margin:22px 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:#8c847d;font-weight:600;">Payment summary</h3>
+            <table role="presentation" style="width:100%;border-collapse:collapse;font-size:14px;">
+              <tr><td style="padding:6px 0;color:#5c554f;">Total service price</td><td style="padding:6px 0;text-align:right;color:#1b1720;font-weight:600;">&#8377;${full_price}</td></tr>
+              ${discountHtmlRow}
+              <tr><td style="padding:6px 0;color:#5c554f;">${paymentLabel}</td><td style="padding:6px 0;text-align:right;color:#9c7b34;font-weight:600;">- &#8377;${amount_paid}</td></tr>
+              <tr><td style="padding:12px 0 0;border-top:1px solid #ddd6ca;color:#1b1720;font-weight:600;">Remaining due at salon</td><td style="padding:12px 0 0;border-top:1px solid #ddd6ca;text-align:right;color:#1b1720;font-weight:700;font-size:16px;">&#8377;${remainingAmount}</td></tr>
+            </table>`
+        })
       })
     }).catch(err => console.error("Brevo Email Sending Error:", err));
 
@@ -751,13 +742,13 @@ async function generateAndSendInvoiceEmail(data) {
       const base64Pdf = pdfBuffer.toString('base64');
 
       // --- EXISTING: Dynamic Email HTML (Shows coins if earned) ---
-      const coinHtmlBanner = data.earnedCoins > 0 ? `
-        <div style="background-color: #E8FCCF; border: 2px dashed #3E8914; padding: 15px; margin-top: 25px; border-radius: 8px; text-align: center;">
-          <h3 style="color: #134611; margin: 0 0 8px 0; font-size: 18px;">🎉 You earned ${data.earnedCoins} Supercoins!</h3>
-          <p style="color: #3E8914; margin: 0; font-weight: bold; font-size: 16px;">Total Balance: ${data.totalCoinsBalance} Coins</p>
-          <p style="color: #134611; font-size: 12px; margin-top: 8px; opacity: 0.8;">Reach 1000 coins for a flat discount on a future visit.</p>
-        </div>
-      ` : '';
+      const coinHtmlBanner = data.earnedCoins > 0
+        ? rewardBanner({
+            heading: `You earned ${data.earnedCoins} Supercoins`,
+            subline: 'Reach 1,000 coins for a flat discount on a future visit.',
+            value: `${data.totalCoinsBalance} coins`,
+          })
+        : '';
 
       fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
@@ -770,20 +761,13 @@ async function generateAndSendInvoiceEmail(data) {
           sender: { name: "SalonBooker", email: process.env.EMAIL_USER },
           to: [{ email: data.email, name: data.customerName }],
           subject: `Thank you for visiting! - Your Invoice #${data.bookingId}`,
-          htmlContent: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px;">
-              <div style="background-color: #134611; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-                <h1 style="color: #E8FCCF; margin: 0; font-size: 24px;">Thank You for Visiting!</h1>
-              </div>
-              <div style="padding: 20px; color: #134611;">
-                <p style="font-size: 16px;">Hi <strong>${data.customerName}</strong>,</p>
-                <p>We hope you loved your experience with us today!</p>
-                <p>We have attached your official final receipt PDF to this email for your records.</p>
-                ${coinHtmlBanner}
-                <p style="margin-top: 30px; font-weight: bold; text-align: center; color: #3E8914;">We look forward to seeing you again soon!</p>
-              </div>
-            </div>
-          `,
+          htmlContent: emailLayout({
+            title: 'Thank you for visiting',
+            intro: `<p style="margin:0 0 10px;">Hi <strong>${data.customerName}</strong>,</p>
+                    <p style="margin:0;">We hope you loved your visit. Your final receipt is attached to this email.</p>`,
+            body: coinHtmlBanner,
+            footerNote: 'We look forward to seeing you again soon.'
+          }),
           attachment: [{ content: base64Pdf, name: `Invoice_INV-${data.bookingId}.pdf` }]
         })
       }).catch(err => console.error("Brevo Email Error:", err));
@@ -804,103 +788,7 @@ async function generateAndSendInvoiceEmail(data) {
       }
     });
 
-    const darkGreen = '#134611';
-    const accentGreen = '#3E8914';
-    const grayText = '#555555';
-    
-    // Top Header Section
-    doc.font('Helvetica-Bold').fontSize(32).fillColor(darkGreen).text('INVOICE', 50, 50);
-    doc.fontSize(14).fillColor(accentGreen).text(`INV-${data.bookingId}`, 400, 65, { align: 'right' });
-    doc.moveDown(3);
-
-    const infoTop = 130;
-    
-    // Left Side: FROM
-    doc.font('Helvetica-Bold').fontSize(10).fillColor(accentGreen).text('FROM', 50, infoTop);
-    doc.fontSize(12).fillColor(darkGreen).text('SalonBooker Studio', 50, infoTop + 15);
-    doc.font('Helvetica').fontSize(10).fillColor(grayText);
-    doc.text('Near DN Nagar', 50, infoTop + 32);
-    doc.text('Mumbai, Maharashtra, India', 50, infoTop + 46);
-
-    // Right Side: BILL TO
-    doc.font('Helvetica-Bold').fontSize(10).fillColor(accentGreen).text('BILL TO', 300, infoTop);
-    doc.fontSize(12).fillColor(darkGreen).text(data.customerName, 300, infoTop + 15);
-    doc.font('Helvetica').fontSize(10).fillColor(grayText);
-    doc.text(`Date: ${new Date().toLocaleDateString('en-IN')}`, 300, infoTop + 32);
-
-    // --- TABLE SECTION ---
-    const tableTop = 240;
-    
-    doc.moveTo(50, tableTop).lineTo(545, tableTop).lineWidth(1.5).strokeColor(accentGreen).stroke();
-
-    doc.font('Helvetica-Bold').fontSize(10).fillColor(accentGreen);
-    doc.text('Description', 50, tableTop + 8);
-    doc.text('Stylist', 250, tableTop + 8);
-    doc.text('Amount', 445, tableTop + 8, { width: 100, align: 'right' });
-
-    const rowTop = tableTop + 25;
-    doc.moveTo(50, rowTop).lineTo(545, rowTop).lineWidth(1.5).strokeColor(accentGreen).stroke();
-
-    const itemTop = rowTop + 10;
-    doc.font('Helvetica').fontSize(11).fillColor(darkGreen);
-    doc.text(data.serviceName, 50, itemTop);
-    doc.text(data.staffName, 250, itemTop);
-    doc.text(`Rs. ${data.totalAmount}`, 445, itemTop, { width: 100, align: 'right' });
-
-    doc.moveTo(50, itemTop + 20).lineTo(545, itemTop + 20).lineWidth(0.5).strokeColor('#e0e0e0').stroke();
-
-    // --- CALCULATIONS SECTION ---
-    const calcTop = itemTop + 40;
-    const calcLeft = 320;
-
-    doc.font('Helvetica').fontSize(10).fillColor(grayText);
-    doc.text('Total Amount:', calcLeft, calcTop);
-    doc.font('Helvetica-Bold').fillColor(darkGreen).text(`Rs. ${data.totalAmount}`, 445, calcTop, { width: 100, align: 'right' });
-
-    let nextY = calcTop + 20;
-    
-    // 1. Show Discount (If Applicable)
-    if (data.discountAmount > 0) {
-      doc.font('Helvetica-Bold').fillColor(accentGreen).text('Supercoin Discount:', calcLeft, nextY);
-      doc.text(`- Rs. ${data.discountAmount}`, 445, nextY, { width: 100, align: 'right' });
-      nextY += 15;
-    }
-    
-    // 2. Show Online Deposit (If Applicable)
-    doc.font('Helvetica').fillColor(grayText);
-    if (data.paidAmount > 0) {
-      doc.text('Online Deposit:', calcLeft, nextY);
-      doc.text(`Rs. ${data.paidAmount}`, 445, nextY, { width: 100, align: 'right' });
-      nextY += 15;
-    }
-    
-    // 3. Show Final Counter Due
-    doc.text('Paid at Counter:', calcLeft, nextY);
-    doc.text(`Rs. ${data.dueAmount}`, 445, nextY, { width: 100, align: 'right' });
-
-    const blockTop = nextY + 25;
-    doc.rect(50, blockTop, 495, 30).fill(accentGreen);
-    
-    doc.font('Helvetica-Bold').fontSize(12).fillColor('#ffffff');
-    doc.text('BALANCE DUE', 60, blockTop + 9);
-    doc.text('Rs. 0', 445, blockTop + 9, { width: 90, align: 'right' });
-
-    // --- NEW: SUPERCOIN REWARD BADGE ON PDF ---
-    if (data.earnedCoins > 0) {
-      const coinTop = blockTop + 45;
-      
-      // Light green background block
-      doc.rect(50, coinTop, 495, 35).fill('#E8FCCF');
-      
-      // Border around the block
-      doc.rect(50, coinTop, 495, 35).lineWidth(1).strokeColor(accentGreen).stroke();
-
-      doc.font('Helvetica-Bold').fontSize(11).fillColor(darkGreen);
-      doc.text(`REWARD: You earned ${data.earnedCoins} Supercoins!`, 65, coinTop + 12);
-      
-      doc.fillColor(accentGreen);
-      doc.text(`Total Balance: ${data.totalCoinsBalance} Coins`, 335, coinTop + 12, { width: 200, align: 'right' });
-    }
+    renderInvoice(doc, data);
 
     doc.end();
   } catch (err) {

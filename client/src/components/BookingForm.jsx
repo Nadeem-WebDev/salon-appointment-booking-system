@@ -1,5 +1,26 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { CalendarX } from 'lucide-react';
+import { CalendarX, Coins, CreditCard, Scissors, UserRound, CalendarDays } from 'lucide-react';
+import { Alert, Button, Checkbox, Field, Input, RadioCard, Select } from './ui/index.js';
+import { brand } from '../theme/theme.js';
+
+/** Small numbered section heading, so the flow reads as clear steps. */
+function Step({ index, icon: Icon, title, children }) {
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex items-center gap-2.5">
+        <span className="grid place-items-center h-6 w-6 shrink-0 rounded-full bg-primary-soft border border-primary/25 text-primary text-[11px] font-semibold tabular-nums">
+          {index}
+        </span>
+        <h4 className="m-0 text-[13px] font-semibold uppercase tracking-[0.09em] text-content-secondary flex items-center gap-1.5">
+          {Icon && <Icon size={13} className="text-primary" aria-hidden="true" />}
+          {title}
+        </h4>
+        <span className="flex-1 h-px bg-[var(--border-subtle)]" aria-hidden="true" />
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export default function BookingForm({ apiBase, onBooked }) {
   // Form States
@@ -9,26 +30,26 @@ export default function BookingForm({ apiBase, onBooked }) {
   const [paymentType, setPaymentType] = useState('deposit'); // 'deposit' or 'full'
   const [walletBalance, setWalletBalance] = useState(0);
   const [redeemCoins, setRedeemCoins] = useState(false);
-  
+
   // Dynamic Config Data
   const [servicesList, setServicesList] = useState([]);
   const [staffList, setStaffList] = useState([]);
   const [serviceId, setServiceId] = useState('');
   const [staffId, setStaffId] = useState('');
-  
+
   // Settings & Availability Data
   const [businessHours, setBusinessHours] = useState([]);
   const [blockedDates, setBlockedDates] = useState([]);
   const [appointmentDate, setAppointmentDate] = useState('');
   const [appointmentSlot, setAppointmentSlot] = useState('');
-  const [bookedSlots, setBookedSlots] = useState([]); 
-  
+  const [bookedSlots, setBookedSlots] = useState([]);
+
   // UI States
   const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState(''); 
+  const [messageType, setMessageType] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const todayString = new Date().toLocaleDateString('en-CA'); 
+  const todayString = new Date().toLocaleDateString('en-CA');
 
   useEffect(() => {
     const fetchSalonData = async () => {
@@ -37,21 +58,21 @@ export default function BookingForm({ apiBase, onBooked }) {
           fetch(`${apiBase}/bookings/services`),
           fetch(`${apiBase}/bookings/staff`),
           fetch(`${apiBase}/bookings/settings/hours`),
-          fetch(`${apiBase}/bookings/settings/blocked-dates`)
+          fetch(`${apiBase}/bookings/settings/blocked-dates`),
         ]);
-        
+
         const servicesData = await servicesRes.json();
         const staffData = await staffRes.json();
-        
+
         setServicesList(servicesData);
         setStaffList(staffData);
         setBusinessHours(await hoursRes.json());
         setBlockedDates(await blockedRes.json());
-        
+
         if (servicesData.length > 0) setServiceId(servicesData[0].id);
         if (staffData.length > 0) setStaffId(staffData[0].id);
       } catch (err) {
-        console.error("Failed to load salon config", err);
+        console.error('Failed to load salon config', err);
       }
     };
     fetchSalonData();
@@ -65,12 +86,9 @@ export default function BookingForm({ apiBase, onBooked }) {
     const fetchBookedSlots = async () => {
       try {
         const res = await fetch(`${apiBase}/bookings/booked-times?date=${appointmentDate}&staff_id=${staffId}`);
-        if (res.ok) {
-          const data = await res.json();
-          setBookedSlots(data);
-        }
+        if (res.ok) setBookedSlots(await res.json());
       } catch (err) {
-        console.error("Failed to fetch booked slots", err);
+        console.error('Failed to fetch booked slots', err);
       }
     };
     fetchBookedSlots();
@@ -80,27 +98,27 @@ export default function BookingForm({ apiBase, onBooked }) {
     const cleanPhone = phone.replace(/\D/g, '');
     if (cleanPhone.length === 10) {
       fetch(`${apiBase}/bookings/check-wallet/${cleanPhone}`)
-        .then(res => res.json())
-        .then(data => {
+        .then((res) => res.json())
+        .then((data) => {
           if (data.exists) {
             setWalletBalance(Number(data.supercoins));
-            // Auto-fill name if they haven't typed it yet
-            setCustomerName(prev => prev || data.name);
+            setCustomerName((prev) => prev || data.name);
           } else {
             setWalletBalance(0);
             setRedeemCoins(false);
           }
         })
-        .catch(err => console.error("Wallet check failed:", err));
+        .catch((err) => console.error('Wallet check failed:', err));
     } else {
       setWalletBalance(0);
       setRedeemCoins(false);
     }
   }, [phone, apiBase]);
 
-  const upcomingClosures = useMemo(() => {
-    return blockedDates.filter(bd => bd.blocked_date >= todayString);
-  }, [blockedDates, todayString]);
+  const upcomingClosures = useMemo(
+    () => blockedDates.filter((bd) => bd.blocked_date >= todayString),
+    [blockedDates, todayString]
+  );
 
   const formatHolidayDate = (dateString) => {
     const [year, month, day] = dateString.split('-');
@@ -111,8 +129,8 @@ export default function BookingForm({ apiBase, onBooked }) {
   const handleDateChange = (e) => {
     const selectedDate = e.target.value;
     setMessage('');
-    
-    const blockedDateEntry = blockedDates.find(bd => bd.blocked_date === selectedDate);
+
+    const blockedDateEntry = blockedDates.find((bd) => bd.blocked_date === selectedDate);
     if (blockedDateEntry) {
       setMessageType('error');
       setMessage(`Sorry, we are closed on this date. Reason: ${blockedDateEntry.reason}`);
@@ -123,7 +141,7 @@ export default function BookingForm({ apiBase, onBooked }) {
 
     const dateObj = new Date(selectedDate);
     const dayOfWeek = dateObj.getUTCDay();
-    const daySettings = businessHours.find(h => h.day_of_week === dayOfWeek);
+    const daySettings = businessHours.find((h) => h.day_of_week === dayOfWeek);
 
     if (daySettings && daySettings.is_closed) {
       setMessageType('error');
@@ -134,7 +152,7 @@ export default function BookingForm({ apiBase, onBooked }) {
     }
 
     setAppointmentDate(selectedDate);
-    setAppointmentSlot(''); 
+    setAppointmentSlot('');
   };
 
   const availableSlots = useMemo(() => {
@@ -142,33 +160,31 @@ export default function BookingForm({ apiBase, onBooked }) {
 
     const dateObj = new Date(appointmentDate);
     const dayOfWeek = dateObj.getUTCDay();
-    const daySettings = businessHours.find(h => h.day_of_week === dayOfWeek);
+    const daySettings = businessHours.find((h) => h.day_of_week === dayOfWeek);
 
     if (!daySettings || daySettings.is_closed) return [];
 
     const slots = [];
     const isToday = appointmentDate === todayString;
     const now = new Date();
-    
+
     const [openH, openM] = daySettings.open_time.split(':').map(Number);
     const [closeH, closeM] = daySettings.close_time.split(':').map(Number);
-    
+
     const startMins = openH * 60 + openM;
     const endMins = closeH * 60 + closeM;
 
     for (let currentMins = startMins; currentMins <= endMins; currentMins += 30) {
       const h = Math.floor(currentMins / 60);
       const m = currentMins % 60;
-      
-      const hour = h.toString().padStart(2, '0');
-      const min = m.toString().padStart(2, '0');
-      const timeString = `${hour}:${min}`;
+
+      const timeString = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 
       if (isToday) {
         const nowMins = now.getHours() * 60 + now.getMinutes();
         if (currentMins <= nowMins) continue;
       }
-      
+
       if (bookedSlots.includes(timeString)) continue;
       slots.push(timeString);
     }
@@ -179,22 +195,22 @@ export default function BookingForm({ apiBase, onBooked }) {
     const [h, m] = time24.split(':');
     const hour = parseInt(h, 10);
     const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+    const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
     return `${displayHour}:${m} ${ampm}`;
   };
 
-  // --- Calculate exact amounts with Supercoin discounts ---
-  const selectedServiceObj = servicesList.find(s => String(s.id) === String(serviceId));
+  // --- Amounts, including Supercoin discount ---
+  const selectedServiceObj = servicesList.find((s) => String(s.id) === String(serviceId));
   const baseFullPrice = selectedServiceObj ? Number(selectedServiceObj.price) : 0;
-  const discountAmount = (redeemCoins && walletBalance >= 1000 && baseFullPrice >= 1000) ? 1000 : 0;
-  
-  const uiFullPrice = Math.max(0, baseFullPrice - discountAmount);
-  const uiDepositPrice = Math.round(uiFullPrice * 0.30);
+  const discountAmount = redeemCoins && walletBalance >= 1000 && baseFullPrice >= 1000 ? 1000 : 0;
 
-  // Handle Razorpay Checkout
+  const uiFullPrice = Math.max(0, baseFullPrice - discountAmount);
+  const uiDepositPrice = Math.round(uiFullPrice * 0.3);
+  const payableNow = paymentType === 'full' ? uiFullPrice : uiDepositPrice;
+
   async function handlePaymentCheckout(e) {
-    e.preventDefault(); 
-    setLoading(true); 
+    e.preventDefault();
+    setLoading(true);
     setMessage('');
 
     if (!appointmentDate || !appointmentSlot) {
@@ -209,18 +225,17 @@ export default function BookingForm({ apiBase, onBooked }) {
       const [hour, minute] = appointmentSlot.split(':');
       const finalAppointmentTime = new Date(year, month - 1, day, hour, minute).toISOString();
 
-      // Pass the payment_type flag to the backend
       const orderRes = await fetch(`${apiBase}/bookings/create-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           service_id: serviceId,
           staff_id: staffId,
           appointment_time: finalAppointmentTime,
           payment_type: paymentType,
           phone: phone,
-          redeem_coins: redeemCoins
-        })
+          redeem_coins: redeemCoins,
+        }),
       });
       const orderData = await orderRes.json();
 
@@ -228,18 +243,17 @@ export default function BookingForm({ apiBase, onBooked }) {
         setAppointmentSlot('');
         throw new Error(orderData.error);
       }
-      
+
       if (!orderRes.ok) throw new Error(orderData.error);
 
       const options = {
         key: orderData.key_id,
         amount: orderData.payable_amount * 100,
         currency: orderData.currency,
-        name: "SalonBooker",
-        description: paymentType === 'full' ? "100% Appointment Payment" : "30% Appointment Deposit",
+        name: 'SalonBooker',
+        description: paymentType === 'full' ? '100% Appointment Payment' : '30% Appointment Deposit',
         order_id: orderData.order_id,
         handler: async function (response) {
-          
           const verifyRes = await fetch(`${apiBase}/bookings/verify-payment`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -254,17 +268,21 @@ export default function BookingForm({ apiBase, onBooked }) {
                 service_id: serviceId,
                 staff_id: staffId,
                 appointment_time: finalAppointmentTime,
-                amount_paid: orderData.payable_amount, // Pass the dynamically charged amount back
-                redeem_coins: redeemCoins
-              }
-            })
+                amount_paid: orderData.payable_amount,
+                redeem_coins: redeemCoins,
+              },
+            }),
           });
 
           if (verifyRes.ok) {
             if (typeof onBooked === 'function') onBooked();
             setMessageType('success');
-            setMessage(`✓ Payment of ₹${orderData.payable_amount} received! Appointment confirmed.`);
-            setCustomerName(''); setPhone(''); setEmail(''); setAppointmentDate(''); setAppointmentSlot('');
+            setMessage(`Payment of ₹${orderData.payable_amount} received. Your appointment is confirmed.`);
+            setCustomerName('');
+            setPhone('');
+            setEmail('');
+            setAppointmentDate('');
+            setAppointmentSlot('');
           } else {
             const errorData = await verifyRes.json();
             setMessageType('error');
@@ -272,197 +290,271 @@ export default function BookingForm({ apiBase, onBooked }) {
           }
         },
         prefill: { name: customerName, email: email, contact: phone },
-        theme: { color: "#134611" }
+        theme: { color: brand.primary },
       };
 
       const paymentObject = new window.Razorpay(options);
-      
-      paymentObject.on('payment.failed', function (response) {
+
+      paymentObject.on('payment.failed', function () {
         setMessageType('error');
         setMessage('Payment was cancelled or failed. Please try again.');
       });
-      
-      paymentObject.open();
 
+      paymentObject.open();
     } catch (err) {
       setMessageType('error');
-      setMessage(`✗ ${err.message}`);
+      setMessage(err.message);
     } finally {
       setLoading(false);
     }
   }
 
-  const messageStyles = {
-    'success': 'bg-[#96E072]/30 text-[#134611] border-l-4 border-[#3E8914]',
-    'error': 'bg-red-100 text-red-700 border-l-4 border-red-500'
-  };
-
-  const inputClass = "w-full bg-white/50 backdrop-blur-sm p-2.5 md:p-[12px_14px] min-h-[48px] border-2 border-[#3DA35D]/40 rounded-xl text-[#134611] font-bold transition-all duration-300 focus:outline-none focus:border-[#3E8914] focus:bg-white/80 focus:ring-4 focus:ring-[#96E072]/40 placeholder-[#134611]/50";
+  const canSubmit = appointmentDate && appointmentSlot && serviceId && staffId;
 
   return (
-    <div className="grid gap-4 md:gap-5 relative animate-slideIn">
-      
+    <div className="flex flex-col gap-6">
       {upcomingClosures.length > 0 && (
-        <div className="bg-amber-100/60 backdrop-blur-sm border border-amber-300/60 rounded-xl p-4 shadow-sm mb-2">
-          <div className="flex items-center gap-2 text-amber-800 font-black mb-2 text-sm">
-            <CalendarX size={18} />
-            Upcoming Closures & Holidays
-          </div>
-          <ul className="m-0 pl-6 list-disc space-y-1">
-            {upcomingClosures.map(holiday => (
-              <li key={holiday.id} className="text-sm font-bold text-amber-900/80">
-                <span className="text-amber-900">{formatHolidayDate(holiday.blocked_date)}</span> — {holiday.reason}
+        <Alert tone="warning">
+          <p className="flex items-center gap-2 font-semibold m-0 mb-2">
+            <CalendarX size={15} aria-hidden="true" /> Upcoming closures
+          </p>
+          <ul className="m-0 pl-4 space-y-1 list-disc marker:text-warning">
+            {upcomingClosures.map((holiday) => (
+              <li key={holiday.id} className="text-[13px] font-normal text-content-secondary">
+                <span className="text-content font-medium">{formatHolidayDate(holiday.blocked_date)}</span>
+                {' — '}
+                {holiday.reason}
               </li>
             ))}
           </ul>
-        </div>
+        </Alert>
       )}
 
-      <form onSubmit={handlePaymentCheckout} className="grid gap-4 md:gap-5">
-        <div className="flex flex-col">
-          <label htmlFor="name" className="text-[14px] font-bold text-[#134611] mb-2">Full Name *</label>
-          <input id="name" type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Enter your name" required className={inputClass} />
-        </div>
-        
-        <div className="flex flex-col">
-          <label htmlFor="email" className="text-[14px] font-bold text-[#134611] mb-2">Email Address *</label>
-          <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="For receipt & confirmation" required className={inputClass} />
-        </div>
-        
-        <div className="flex flex-col">
-          <label htmlFor="phone" className="text-[14px] font-bold text-[#134611] mb-2">Phone Number *</label>
-          <input id="phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Required for payment verification" required className={inputClass} />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
-          <div className="flex flex-col">
-            <label htmlFor="service" className="text-[14px] font-bold text-[#134611] mb-2">Service *</label>
-            <select id="service" value={serviceId} onChange={e => setServiceId(e.target.value)} required className={inputClass}>
-              {servicesList.length === 0 && <option value="">Loading services...</option>}
-              {servicesList.map(s => (
-                <option key={s.id} value={s.id}>{s.name} - ₹{s.price}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col">
-            <label htmlFor="staff" className="text-[14px] font-bold text-[#134611] mb-2">Preferred Stylist *</label>
-            <select id="staff" value={staffId} onChange={e => { setStaffId(e.target.value); setAppointmentSlot(''); }} required className={inputClass}>
-              {staffList.length === 0 && <option value="">Loading staff...</option>}
-              {staffList.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
-          <div className="flex flex-col">
-            <label htmlFor="date" className="text-[14px] font-bold text-[#134611] mb-2">Date *</label>
-            <input id="date" type="date" min={todayString} value={appointmentDate} onChange={handleDateChange} required className={inputClass} />
-          </div>
-          <div className="flex flex-col">
-            <label htmlFor="time" className="text-[14px] font-bold text-[#134611] mb-2">Time Slot *</label>
-            <select 
-              id="time" value={appointmentSlot} onChange={e => setAppointmentSlot(e.target.value)} required 
-              disabled={!appointmentDate} className={`${inputClass} ${!appointmentDate ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <option value="" disabled>{!appointmentDate ? 'Select a date first' : 'Choose a time'}</option>
-              {availableSlots.length > 0 ? (
-                availableSlots.map(slot => (<option key={slot} value={slot}>{formatTimeDisplay(slot)}</option>))
-              ) : (
-                appointmentDate && <option value="" disabled>No slots available</option>
-              )}
-            </select>
-          </div>
-        </div>
-        
-        {/* --- SUPERCOIN WALLET DISPLAY --- */}
-        {walletBalance > 0 && (() => {
-          const canRedeem = walletBalance >= 1000 && baseFullPrice >= 1000;
-          return (
-            <div className="mt-1 p-4 bg-white/80 rounded-xl border border-[#3E8914]/30 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-black text-[#3E8914] uppercase tracking-wider mb-1">Your Loyalty Wallet</p>
-                <p className="text-sm font-bold text-[#134611] m-0">
-                  Balance: <span className="bg-[#E8FCCF] px-2 py-0.5 rounded text-[#3E8914]">{walletBalance} Coins</span>
-                </p>
-              </div>
-              
-              {walletBalance >= 1000 ? (
-                baseFullPrice >= 1000 ? (
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <span className="text-sm font-black text-[#134611]">Redeem 1000 Coins (₹1000 Off)</span>
-                    <input 
-                      type="checkbox" 
-                      checked={redeemCoins} 
-                      onChange={(e) => setRedeemCoins(e.target.checked)} 
-                      className="w-5 h-5 accent-[#3E8914] cursor-pointer"
-                    />
-                  </label>
-                ) : (
-                  <p className="text-xs font-bold text-amber-700 m-0 text-left sm:text-right">
-                    Service must be ₹1000+<br className="hidden sm:block"/>to redeem coins.
-                  </p>
-                )
-              ) : (
-                <p className="text-xs font-bold text-[#134611]/50 m-0 text-left sm:text-right">
-                  Need {1000 - walletBalance} more coins<br className="hidden sm:block"/>for a discount!
-                </p>
-              )}
+      <form onSubmit={handlePaymentCheckout} className="flex flex-col gap-7">
+        <Step index={1} icon={UserRound} title="Your details">
+          <div className="grid gap-4">
+            <Field label="Full name" htmlFor="name" required>
+              <Input
+                id="name"
+                type="text"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Enter your name"
+                required
+              />
+            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Email address" htmlFor="email" required hint="For your receipt">
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                />
+              </Field>
+              <Field label="Phone number" htmlFor="phone" required hint="Used to verify payment">
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="10-digit mobile"
+                  required
+                />
+              </Field>
             </div>
-          );
-        })()}
-
-        {/* --- NEW: Payment Options Radio Buttons --- */}
-        <div className="flex flex-col mt-2">
-          <label className="text-[14px] font-bold text-[#134611] mb-3">Payment Option *</label>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <label className={`flex-1 p-3.5 rounded-xl border-2 flex items-start gap-3 cursor-pointer transition-all ${paymentType === 'deposit' ? 'border-[#3E8914] bg-[#96E072]/20' : 'border-[#3DA35D]/40 bg-white/50 hover:border-[#3E8914]/50'}`}>
-              <input 
-                type="radio" 
-                name="paymentType" 
-                value="deposit" 
-                checked={paymentType === 'deposit'} 
-                onChange={() => setPaymentType('deposit')} 
-                className="w-4 h-4 mt-0.5 accent-[#3E8914]" 
-              />
-              <div className="flex flex-col">
-                <span className="text-[#134611] font-black text-[15px]">Pay 30% Deposit</span>
-                <span className="text-[#3DA35D] font-bold text-[13px] mt-1">₹{uiDepositPrice} now, rest at salon</span>
-              </div>
-            </label>
-            
-            <label className={`flex-1 p-3.5 rounded-xl border-2 flex items-start gap-3 cursor-pointer transition-all ${paymentType === 'full' ? 'border-[#3E8914] bg-[#96E072]/20' : 'border-[#3DA35D]/40 bg-white/50 hover:border-[#3E8914]/50'}`}>
-              <input 
-                type="radio" 
-                name="paymentType" 
-                value="full" 
-                checked={paymentType === 'full'} 
-                onChange={() => setPaymentType('full')} 
-                className="w-4 h-4 mt-0.5 accent-[#3E8914]" 
-              />
-              <div className="flex flex-col">
-                <span className="text-[#134611] font-black text-[15px]">Pay 100% Upfront</span>
-                <span className="text-[#3DA35D] font-bold text-[13px] mt-1">₹{uiFullPrice} now, nothing due later</span>
-              </div>
-            </label>
           </div>
-        </div>
+        </Step>
 
-        <button 
-          type="submit" 
-          disabled={loading || !appointmentDate || !appointmentSlot || !serviceId || !staffId} 
-          className="mt-3 py-4 px-6 bg-[#3E8914] text-[#E8FCCF] border-none rounded-xl text-[16px] font-black cursor-pointer transition-all duration-300 hover:not(:disabled):bg-[#134611] hover:not(:disabled):shadow-[0_8px_20px_rgba(19,70,17,0.3)] hover:not(:disabled):-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {loading ? 'Connecting to Secure Checkout...' : `Pay ₹${paymentType === 'full' ? uiFullPrice : uiDepositPrice} & Book →`}
-        </button>
+        <Step index={2} icon={Scissors} title="Service & stylist">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Service" htmlFor="service" required>
+              <Select
+                id="service"
+                value={serviceId}
+                onChange={(e) => setServiceId(e.target.value)}
+                required
+              >
+                {servicesList.length === 0 && <option value="">Loading services…</option>}
+                {servicesList.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} — ₹{s.price}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Preferred stylist" htmlFor="staff" required>
+              <Select
+                id="staff"
+                value={staffId}
+                onChange={(e) => {
+                  setStaffId(e.target.value);
+                  setAppointmentSlot('');
+                }}
+                required
+              >
+                {staffList.length === 0 && <option value="">Loading staff…</option>}
+                {staffList.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+        </Step>
+
+        <Step index={3} icon={CalendarDays} title="Date & time">
+          <Field label="Date" htmlFor="date" required>
+            <Input
+              id="date"
+              type="date"
+              min={todayString}
+              value={appointmentDate}
+              onChange={handleDateChange}
+              required
+            />
+          </Field>
+
+          <fieldset className="border-none p-0 m-0 min-w-0">
+            <legend className="text-[11px] font-semibold uppercase tracking-[0.07em] text-content-secondary mb-2 p-0">
+              Time slot <span className="text-primary">*</span>
+            </legend>
+
+            {!appointmentDate ? (
+              <p className="m-0 text-[13px] text-content-muted bg-surface-sunken border border-dashed border-line rounded-[var(--radius-md)] px-4 py-4 text-center">
+                Choose a date to see available times.
+              </p>
+            ) : availableSlots.length === 0 ? (
+              <p className="m-0 text-[13px] text-content-secondary bg-danger-soft border border-danger/20 rounded-[var(--radius-md)] px-4 py-4 text-center">
+                No slots available for this date. Try another day or stylist.
+              </p>
+            ) : (
+              <div
+                role="radiogroup"
+                aria-label="Available time slots"
+                className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-52 overflow-y-auto custom-scrollbar pr-1"
+              >
+                {availableSlots.map((slot) => {
+                  const selected = appointmentSlot === slot;
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setAppointmentSlot(slot)}
+                      className={[
+                        'h-10 rounded-[var(--radius-sm)] text-[13px] font-medium tabular-nums cursor-pointer',
+                        'border transition-all duration-[var(--transition-fast)]',
+                        selected
+                          ? 'bg-primary text-primary-contrast border-primary shadow-[var(--shadow-glow)]'
+                          : 'bg-surface-sunken text-content-secondary border-line hover:border-primary/50 hover:text-content',
+                      ].join(' ')}
+                    >
+                      {formatTimeDisplay(slot)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </fieldset>
+        </Step>
+
+        {walletBalance > 0 && (
+          <div className="rounded-[var(--radius-md)] border border-primary/20 bg-primary-soft p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="grid place-items-center h-9 w-9 shrink-0 rounded-full bg-primary/15 text-primary border border-primary/25">
+                <Coins size={16} aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
+                  Loyalty wallet
+                </p>
+                <p className="m-0 text-sm text-content mt-0.5 tabular-nums">
+                  {walletBalance.toLocaleString()} coins
+                </p>
+              </div>
+            </div>
+
+            {walletBalance >= 1000 ? (
+              baseFullPrice >= 1000 ? (
+                <Checkbox
+                  id="redeem"
+                  checked={redeemCoins}
+                  onChange={(e) => setRedeemCoins(e.target.checked)}
+                  label="Redeem 1000 coins"
+                  description="₹1,000 off this booking"
+                />
+              ) : (
+                <p className="m-0 text-[12px] text-content-secondary sm:text-right">
+                  Service must be ₹1,000+ to redeem coins.
+                </p>
+              )
+            ) : (
+              <p className="m-0 text-[12px] text-content-muted sm:text-right tabular-nums">
+                {(1000 - walletBalance).toLocaleString()} more coins for a discount.
+              </p>
+            )}
+          </div>
+        )}
+
+        <Step index={4} icon={CreditCard} title="Payment">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <RadioCard
+              id="pay-deposit"
+              name="paymentType"
+              value="deposit"
+              checked={paymentType === 'deposit'}
+              onChange={() => setPaymentType('deposit')}
+              label="Pay 30% deposit"
+              description={`₹${uiDepositPrice.toLocaleString()} now, rest at the salon`}
+            />
+            <RadioCard
+              id="pay-full"
+              name="paymentType"
+              value="full"
+              checked={paymentType === 'full'}
+              onChange={() => setPaymentType('full')}
+              label="Pay 100% upfront"
+              description={`₹${uiFullPrice.toLocaleString()} now, nothing due later`}
+            />
+          </div>
+
+          {selectedServiceObj && (
+            <dl className="m-0 rounded-[var(--radius-md)] border border-subtle bg-surface-sunken divide-y divide-[var(--border-subtle)]">
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <dt className="m-0 text-[13px] text-content-secondary">{selectedServiceObj.name}</dt>
+                <dd className="m-0 text-[13px] text-content tabular-nums">
+                  ₹{baseFullPrice.toLocaleString()}
+                </dd>
+              </div>
+              {discountAmount > 0 && (
+                <div className="flex items-center justify-between px-4 py-2.5">
+                  <dt className="m-0 text-[13px] text-primary">Supercoin discount</dt>
+                  <dd className="m-0 text-[13px] text-primary tabular-nums">
+                    −₹{discountAmount.toLocaleString()}
+                  </dd>
+                </div>
+              )}
+              <div className="flex items-center justify-between px-4 py-3">
+                <dt className="m-0 text-[13px] font-semibold text-content">Payable now</dt>
+                <dd className="m-0 font-display text-xl text-primary tabular-nums">
+                  ₹{payableNow.toLocaleString()}
+                </dd>
+              </div>
+            </dl>
+          )}
+        </Step>
+
+        <Button type="submit" size="lg" loading={loading} disabled={!canSubmit} className="w-full">
+          {loading ? 'Connecting to secure checkout…' : `Pay ₹${payableNow.toLocaleString()} & confirm`}
+        </Button>
       </form>
 
-      {message && (
-        <div className={`p-4 rounded-xl font-bold text-[14px] animate-slideIn ${messageStyles[messageType]}`}>
-          {message}
-        </div>
-      )}
+      {message && <Alert tone={messageType === 'error' ? 'danger' : 'success'}>{message}</Alert>}
     </div>
   );
 }

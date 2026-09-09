@@ -1,12 +1,205 @@
 @import "tailwindcss";
+@import "./theme/tokens.css";
+
+/* ==========================================================================
+   BASE
+   ========================================================================== */
+* {
+  border-color: var(--border-subtle);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
 
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, sans-serif;
-  -webkit-tap-highlight-color: transparent; 
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-feature-settings: 'cv02', 'cv03', 'cv04';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Remove Recharts tap/click outlines */
+::selection {
+  background: var(--primary-soft);
+  color: var(--text-primary);
+}
+
+/* Display face for major headings, opted into with .font-display */
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Native controls should render dark rather than the browser's light default */
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+  color-scheme: inherit;
+}
+
+/* Keyboard focus only — never a ring on mouse click */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* The date/time picker indicator is black-on-black without this */
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='time']::-webkit-calendar-picker-indicator,
+input[type='datetime-local']::-webkit-calendar-picker-indicator {
+  filter: invert(0.75) sepia(0.4) saturate(3) hue-rotate(2deg);
+  cursor: pointer;
+  opacity: 0.7;
+}
+input[type='date']::-webkit-calendar-picker-indicator:hover,
+input[type='time']::-webkit-calendar-picker-indicator:hover,
+input[type='datetime-local']::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* ==========================================================================
+   GLASS — used deliberately, not everywhere
+   ========================================================================== */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-md);
+}
+
+.glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-lg);
+}
+
+/* A single hairline of light along the top edge — the detail that reads
+   as "glass" rather than "translucent box".
+   Painted as a background layer rather than an ::before, because setting
+   `position: relative` here would override Tailwind's fixed/sticky utilities
+   on any element that also carries this class. */
+.glass-edge {
+  background-image: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  background-position: top center;
+}
+
+/* ==========================================================================
+   AMBIENT BACKGROUND — restrained; the UI still reads with it disabled
+   ========================================================================== */
+.app-wash {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 40rem at 12% -10%, var(--wash-one), transparent 60%),
+    radial-gradient(50rem 36rem at 92% 8%, var(--wash-two), transparent 62%),
+    var(--bg);
+}
+
+/* ==========================================================================
+   SCROLLBARS
+   ========================================================================== */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ==========================================================================
+   MOTION — short, small, and never on everything at once
+   ========================================================================== */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.97); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+.animate-slideIn { animation: slideIn var(--transition-normal) both; }
+.animate-fadeIn  { animation: fadeIn var(--transition-normal) both; }
+.animate-scaleIn { animation: scaleIn var(--transition-normal) both; }
+.animate-modalIn { animation: modalIn var(--transition-normal) both; }
+.animate-toastIn { animation: toastIn var(--transition-normal) both; }
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    var(--surface-elevated) 37%,
+    var(--surface) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   RECHARTS — strip the default focus outlines
+   ========================================================================== */
 path.recharts-sector:focus,
 path.recharts-rectangle:focus,
 .recharts-layer:focus,
@@ -14,18 +207,6 @@ path.recharts-rectangle:focus,
 svg:focus {
   outline: none !important;
 }
-
-/* Custom Scrollbar for Fresh Green Theme */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #E8FCCF; 
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #3DA35D; 
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #3E8914;
+.recharts-cartesian-axis-tick text {
+  fill: var(--text-muted);
 }
