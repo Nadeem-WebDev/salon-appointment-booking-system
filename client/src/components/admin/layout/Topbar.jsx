@@ -32,8 +32,8 @@ export default function Topbar({
 
         <div
           className={cx(
-            'grid grid-cols-2 sm:flex sm:flex-row sm:items-center gap-2.5',
-            'w-full md:w-auto'
+            'flex flex-row items-center gap-2.5',
+            showRecordFilters ? 'w-full md:w-auto grid grid-cols-2 sm:flex' : 'shrink-0 w-auto'
           )}
         >
           {showRecordFilters && (

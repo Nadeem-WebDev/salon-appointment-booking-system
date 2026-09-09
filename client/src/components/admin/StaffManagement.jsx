@@ -141,8 +141,9 @@ export default function StaffManagement({ apiBase, token }) {
                 <div
                   key={person.id}
                   className={[
-                    'flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4',
+                    'flex justify-between gap-4 p-4',
                     'rounded-[var(--radius-md)] border transition-colors duration-[var(--transition-fast)]',
+                    isEditing ? 'flex-col' : 'flex-row items-center',
                     !person.is_active
                       ? 'bg-surface-sunken/50 border-subtle'
                       : 'bg-surface-sunken border-line hover:border-strong',
