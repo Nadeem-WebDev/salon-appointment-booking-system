@@ -458,19 +458,23 @@ export function Pagination({ page, totalPages, onPrev, onNext, className }) {
     <nav
       aria-label="Pagination"
       className={cx(
-        'flex flex-col sm:flex-row items-center justify-between gap-3',
+        /* Removed flex-col and sm:flex-row, forced flex-row for all screens */
+        'flex flex-row items-center justify-between gap-2 sm:gap-3',
         'bg-surface border border-subtle rounded-[var(--radius-lg)] p-3',
         className
       )}
     >
-      <Button variant="outline" size="sm" onClick={onPrev} disabled={page <= 1} className="w-full sm:w-auto">
-        ← Previous
+      {/* Removed w-full and sm:w-auto so buttons don't stretch across the screen */}
+      <Button variant="outline" size="sm" onClick={onPrev} disabled={page <= 1}>
+          Previous
       </Button>
-      <span className="text-[13px] text-content-secondary font-medium tabular-nums">
+      
+      <span className="text-[12px] sm:text-[13px] text-content-secondary font-medium tabular-nums whitespace-nowrap">
         Page <span className="text-content font-semibold">{page}</span> of {totalPages}
       </span>
-      <Button variant="outline" size="sm" onClick={onNext} disabled={page >= totalPages} className="w-full sm:w-auto">
-        Next →
+      
+      <Button variant="outline" size="sm" onClick={onNext} disabled={page >= totalPages}>
+        Next  
       </Button>
     </nav>
   );
